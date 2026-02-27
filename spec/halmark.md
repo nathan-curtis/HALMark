@@ -1303,4 +1303,5 @@ The bar is "safe and correct."
 
 *HALmark v0.9.9-draft*  
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*  
+
 *Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*
