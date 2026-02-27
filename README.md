@@ -139,7 +139,8 @@ The bar is “safe and correct.”
 
 ## License
 
-Add your license here (MIT, Apache-2.0, etc.) and include a `LICENSE` file once you pick it.
+MIT
+See the full license in the [LICENSE] file.
 
 ---
 
