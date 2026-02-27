@@ -140,7 +140,7 @@ The bar is “safe and correct.”
 ## License
 
 MIT
-See the full license in the [LICENSE] file.
+See the full license in `./LICENSE`.
 
 ---
 
