@@ -1,13 +1,13 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.9-draft  
-**Status:** Community RFC  
-**Last Updated:** 2026-02-26  
-**HA Version Tested Against:** 2026.2.x  
+**Version:** 0.9.10-draft
+**Status:** Community RFC
+**Last Updated:** 2026-02-28
+**HA Version Tested Against:** 2026.2.x
 **Source of Truth:** https://www.home-assistant.io/docs/configuration/templating/
 
-**Spec Lead:** Nathan Curtis  
-**Technical Reviewer:** Caitlin (Anthropic, Sonnet 4.6) 
+**Spec Lead:** Nathan Curtis
+**Technical Reviewer:** Caitlin (Anthropic, Sonnet 4.6)
 **Editorial & Strategy:** Veronica (OAI, GPT5.2)
 
 ---
@@ -23,10 +23,10 @@ It is both:
 
 If an AI touches production Home Assistant YAML, this is the bar.
 
-HALmark is **not an authorship benchmark.**  
+HALmark is **not an authorship benchmark.**
 It is a **stewardship benchmark.**
 
-We do not measure how impressively an AI can generate code.  
+We do not measure how impressively an AI can generate code.
 We measure whether it can safely maintain a live production system without introducing silent breakage.
 
 Correctness in constrained domains must be measured, not assumed.
@@ -59,8 +59,8 @@ Without domain-specific evaluation:
 
 HALmark introduces measurable pressure for model providers to respect HA's documented constraints.
 
-The benchmark is the proof.  
-The specification is the contract.  
+The benchmark is the proof.
+The specification is the contract.
 The community is the authority.
 
 ---
@@ -1134,6 +1134,147 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-20 — Redundant or Mismatched `default` Before Fallback-Capable Filter
+
+```json
+{
+  "id": "FG-20",
+  "title": "Redundant or Mismatched default Before Fallback-Capable Filter",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.10",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "| default(N) immediately followed by | int(N), | float(N), | bool(N), or | as_timestamp(N) where the filter accepts its own positional fallback",
+    "scope": "jinja"
+  },
+  "fallback_capable_filters": [
+    "int(N)      — handles undefined, None, non-numeric",
+    "float(N)    — handles undefined, None, non-numeric",
+    "bool(N)     — handles undefined, None, non-boolean strings",
+    "as_timestamp(N) — handles undefined, None, non-parseable datetime"
+  ],
+  "filters_where_default_is_meaningful": [
+    "| string    — None | string yields literal 'None'; | default('') | string is not redundant",
+    "| list      — None | list errors; | default([]) | list is not redundant",
+    "| round(N)  — N is precision, not a fallback; default still guards the input",
+    "| from_json — errors on invalid JSON; default is essential",
+    "| tojson    — None | tojson yields 'null'; default may be intentional",
+    "| upper/lower/trim/join/regex_* — no positional fallback; default is doing real work"
+  ],
+  "wrong": [
+    {
+      "code": "{{ amount | default(0) | int(0) }}",
+      "reason": "default(0) is fully subsumed by int(0). int(0) already handles undefined, None, and non-numeric values. The default adds no protection and misleads readers into thinking two distinct fallback cases exist."
+    },
+    {
+      "code": "{{ page | default(1) | int(0) }}",
+      "reason": "Mismatched fallback values create invisible dual-path behavior: None→1 via default, non-numeric→0 via int. Almost never intentional. Confusing to callers and reviewers."
+    },
+    {
+      "code": "{{ flag | default(false) | bool(false) }}",
+      "reason": "default(false) is subsumed by bool(false). bool(false) already handles undefined and None."
+    },
+    {
+      "code": "{{ ts | default(none) | as_timestamp(none) }}",
+      "reason": "default(none) is subsumed by as_timestamp(none). as_timestamp(none) already handles undefined and None."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{{ amount | int(0) }}",
+      "reason": "int(N) is the single source of truth. Handles undefined, None, empty string, and non-numeric inputs."
+    },
+    {
+      "code": "{{ flag | bool(false) }}",
+      "reason": "bool(N) handles all invalid inputs with one explicit fallback."
+    },
+    {
+      "code": "{{ ts | as_timestamp(none) }}",
+      "reason": "as_timestamp(N) handles undefined/None/non-parseable with one explicit fallback."
+    },
+    {
+      "code": "{{ value | default('') | string }}",
+      "reason": "string has no positional fallback — default IS doing meaningful work here, preventing the literal string 'None'."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "The rule applies only when | default(N) is chained immediately before a filter that accepts its own positional fallback AND both N values are the same. When values intentionally differ, the dual-path behavior must be justified with an explicit comment.",
+    "Filters without a positional fallback (string, list, round, from_json, tojson, upper, lower, trim, join, regex_*) are unaffected — default is doing real work in those chains."
+  ]
+}
+```
+
+---
+
+## FG-21 — Silent Attribute Persistence Failure Above 16,384 Bytes
+
+```json
+{
+  "id": "FG-21",
+  "title": "Silent Attribute Persistence Failure Above 16,384 Bytes",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "persistence",
+  "versions": {
+    "added_halmark": "0.9.10",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "trigger-based template sensor with attributes dict that can grow unbounded via set_variable / dict merge pattern",
+    "scope": "yaml"
+  },
+  "context": "HA's recorder component silently drops attribute blobs exceeding 16,384 bytes. No exception is raised, no UI warning appears, and the entity looks healthy in memory. The data is simply not written to the DB. After HA restart, the attributes are gone.",
+  "provenance": [
+    "GitHub home-assistant/core #102964 — 'State attributes exceed maximum size of 16384 bytes'",
+    "HA recorder component source — DB schema enforces warn/reject on oversized attribute JSON"
+  ],
+  "wrong": [
+    {
+      "code": "variables: >\n  {% set current = this.attributes.get('variables', {}) %}\n  ...\n  {{ dict(current, **new) }}",
+      "reason": "No size guard. If the merged dict exceeds 16,384 bytes the recorder silently drops the attribute on the next write. In-memory state looks correct; post-restart the data is gone. No error is raised."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{% set proposed = dict(current, **new) %}\n{{ current if proposed | tojson | length > 16384 else proposed }}",
+      "reason": "Pre-compute the proposed dict and check its serialized byte length before committing. If oversized, return current unchanged. Pair with a logbook.log or persistent_notification in the action block so the caller is told to delete or move data before retrying."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Any trigger-based template sensor using a dict-merge write pattern (dict(current, **new)) with no byte-length pre-check"
+  ],
+  "edge_notes": [
+    "The 16,384-byte limit applies to the total serialized JSON of ALL attributes on the entity, not just the variables dict.",
+    "remove_variable and clear_variables branches always reduce size — no guard needed on those paths.",
+    "The failure is invisible at write time. The only indication is a recorder warning in the HA log, which is easy to miss.",
+    "State value has a separate, unrelated 255-character limit. Attributes are the correct place for structured data — but they are not unlimited."
+  ]
+}
+```
+
+---
+
 # Footgun Field Reference
 
 For model consumption. Every field is present in every FG entry.
@@ -1221,7 +1362,7 @@ Tests: return type correctness, guard discipline, `iif()` short-circuit trap, na
 
 Given a user intent and a synthetic state snapshot, produce a correct Jinja template with proper edge case handling.
 
-**Inputs:** Synthetic state snapshot (JSON) + user intent + allowed helper list  
+**Inputs:** Synthetic state snapshot (JSON) + user intent + allowed helper list
 **Outputs:** Template + short explanation. No unrequested refactors.
 
 Scored against normal, boundary, and hostile state snapshots (unavailable, unknown, boundary-condition values). Hard fail on missing guards, deprecated syntax, hallucinated entities, or unsafe performance patterns.
@@ -1301,7 +1442,7 @@ The bar is "safe and correct."
 
 ---
 
-*HALmark v0.9.9-draft*  
-*The spec defines the contract. The benchmark proves compliance. The community governs both.*  
+*HALmark v0.9.10-draft*
+*The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
 *Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*
