@@ -1275,6 +1275,201 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-22 — Template Trigger Misplacement
+
+```json
+{
+  "id": "FG-22",
+  "title": "Template Trigger Misplacement",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.10",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "complex Jinja logic embedded in a state trigger's value_template instead of a dedicated template trigger",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "trigger:\n  - platform: state\n    entity_id: sensor.temperature\n    to: >-\n      {% if states('sensor.temperature') | float(0) > 25 and\n           states('binary_sensor.window') == 'off' %}on{% endif %}",
+      "reason": "State triggers match literal state strings. Complex Jinja here is treated as a literal target value, not evaluated. The trigger never fires as intended."
+    }
+  ],
+  "correct": [
+    {
+      "code": "trigger:\n  - platform: template\n    value_template: >-\n      {{ states('sensor.temperature') | float(0) > 25 and\n         states('binary_sensor.window') == 'off' }}",
+      "reason": "Template trigger evaluates Jinja and fires when the expression transitions to true."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "State triggers do accept simple literal strings in 'to:' and 'from:' — the failure is placing evaluated Jinja there expecting runtime evaluation."
+  ]
+}
+```
+
+---
+
+## FG-23 — Legacy Service Key Usage
+
+```json
+{
+  "id": "FG-23",
+  "title": "Legacy Service Key Usage",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.10",
+    "added_ha": "2024.8",
+    "ha_risk_window": {
+      "start": "2024.8",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "use of 'service:' key in automation action blocks instead of 'action:'",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "action:\n  - service: light.turn_on\n    target:\n      entity_id: light.kitchen",
+      "reason": "'service:' was renamed to 'action:' in HA 2024.8. Continued use propagates deprecated syntax."
+    }
+  ],
+  "correct": [
+    {
+      "code": "action:\n  - action: light.turn_on\n    target:\n      entity_id: light.kitchen",
+      "reason": "Uses the current 'action:' key introduced in HA 2024.8."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "'service:' remains functional for now but is deprecated. Models must not generate it."
+  ]
+}
+```
+
+---
+
+## FG-24 — Targeting Ambiguity
+
+```json
+{
+  "id": "FG-24",
+  "title": "Targeting Ambiguity",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "operator_integrity",
+  "versions": {
+    "added_halmark": "0.9.10",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "broad area targeting used where label or floor targeting would be more precise, without clarifying intent",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "target:\n  area_id: living_room",
+      "reason": "Area targeting hits every entity in the area including devices the user may not intend to control. When a label or floor would scope this correctly, using area without clarification is ambiguous."
+    }
+  ],
+  "correct": [
+    {
+      "code": "target:\n  label_id: living_room_lights",
+      "reason": "Label targeting scopes to exactly the intended devices. Requires confirming the label exists."
+    },
+    {
+      "code": "# Ask: should this target all entities in living_room, or only lights?\n# Proceed with area_id only after confirmation.",
+      "reason": "When scope is ambiguous, clarify before generating. Never assume the broadest target is correct."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "Area targeting is not wrong by itself — it is wrong when a narrower scope is clearly more appropriate and the model does not flag the ambiguity."
+  ]
+}
+```
+
+---
+
+## FG-25 — Recursive Automation Loop
+
+```json
+{
+  "id": "FG-25",
+  "title": "Recursive Automation Loop",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.10",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "automation action modifies the same entity that appears in its own trigger, with no guard condition preventing re-entry",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "trigger:\n  - platform: state\n    entity_id: input_boolean.sync_flag\naction:\n  - action: input_boolean.toggle\n    target:\n      entity_id: input_boolean.sync_flag",
+      "reason": "Toggling the trigger entity re-fires the automation immediately. No guard condition. Produces an infinite loop until HA's automation protection kicks in or the system degrades."
+    }
+  ],
+  "correct": [
+    {
+      "code": "trigger:\n  - platform: state\n    entity_id: input_boolean.sync_flag\n    to: 'on'\ncondition:\n  - condition: state\n    entity_id: input_boolean.sync_flag\n    state: 'on'\naction:\n  - action: input_boolean.turn_off\n    target:\n      entity_id: input_boolean.sync_flag",
+      "reason": "Guard condition ensures the action only runs when the trigger state matches the expected value, preventing re-entry after the action fires."
+    }
+  ],
+  "deference_required": true,
+  "hard_fail_triggers": [
+    "automation trigger entity and action target entity are identical with no re-entry guard"
+  ],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "HA has a built-in max automation re-run limit, but relying on it is not a substitute for a proper guard.",
+    "Models must warn explicitly when they detect this pattern and require user confirmation before generating."
+  ]
+}
+```
+
+---
+
 # Footgun Field Reference
 
 For model consumption. Every field is present in every FG entry.
