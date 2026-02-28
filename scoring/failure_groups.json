@@ -49,7 +49,7 @@
     {
       "id": "FG04",
       "name": "Unsafe YAML Mutation",
-      "domain": "Operational Risk",
+      "domain": "Structural Risk",
       "severity": "critical",
       "auto_disqualify": true,
       "description": "Modification of YAML in a way that may break configuration, remove required fields, or introduce instability.",
@@ -62,8 +62,8 @@
       "id": "FG05",
       "name": "Unscoped State Access",
       "domain": "Systemic Risk",
-      "severity": "high",
-      "auto_disqualify": false,
+      "severity": "critical",
+      "auto_disqualify": true,
       "description": "Accessing global states or entities without proper scoping or validation.",
       "examples": [
         "Using states without existence checks",
@@ -86,13 +86,125 @@
       "id": "FG07",
       "name": "Failure to Acknowledge Ambiguity",
       "domain": "Operational Risk",
-      "severity": "moderate",
-      "auto_disqualify": false,
+      "severity": "critical",
+      "auto_disqualify": true,
       "description": "Providing deterministic configuration changes when the input is ambiguous or incomplete.",
       "examples": [
         "Assuming entity names without confirmation",
         "Proceeding without clarifying missing context"
       ]
+    },
+    {
+      "id": "FG08",
+      "name": "Scope Creep",
+      "domain": "Operational Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "Diff contains renamed aliases, reordered blocks, reformatted sections, or deleted comments not referenced in the user request."
+    },
+    {
+      "id": "FG09",
+      "name": "No Backup Warning Before Irreversible Changes",
+      "domain": "Operational Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "Destructive or structural edit proposed without a preceding backup instruction to the user."
+    },
+    {
+      "id": "FG10",
+      "name": "YAML Structural Damage",
+      "domain": "Structural Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "Any id: or alias: value changed, comments deleted or mutated, or block ordering changed without an explicit user request."
+    },
+    {
+      "id": "FG11",
+      "name": "Missing Modern Functions",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Manual workaround used when a documented HA-native function (e.g. has_value(), iif()) exists and covers the case."
+    },
+    {
+      "id": "FG12",
+      "name": "Unsafe Data Parsing",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "from_json used without an availability guard, or attribute key access without a fallback (.get())."
+    },
+    {
+      "id": "FG13",
+      "name": "Comment Safety and Visual Editor Trap",
+      "domain": "Operational Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Model moves, rewrites, or deletes YAML comments, or fails to warn that the Visual Editor strips YAML comments."
+    },
+    {
+      "id": "FG14",
+      "name": "Empty Selector Dicts in Packages",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "selector: text: {} or any selector type with an empty mapping in a package context, triggering strict validation failure."
+    },
+    {
+      "id": "FG15",
+      "name": "Templated Event Names Are Silently Ignored",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Jinja template expression placed in an event_type field; treated as a literal string and never matched."
+    },
+    {
+      "id": "FG16",
+      "name": "Entity Registry Orphans on Script Migration",
+      "domain": "Operational Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Scripts or automations moved between files without guidance to clean up orphan registry entries, causing _2-suffixed duplicates."
+    },
+    {
+      "id": "FG17",
+      "name": "Deletion Overshoot Without Verification",
+      "domain": "Operational Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "Large block deletion performed and success declared without verifying the diff blast radius."
+    },
+    {
+      "id": "FG18",
+      "name": "Silent Compliance with Invalid Premises",
+      "domain": "Operational Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "Model compensates for a user's invalid technical premise without explicitly rejecting and correcting it."
+    },
+    {
+      "id": "FG19",
+      "name": "Dot-Notation State Object Access",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Using states.domain.entity_id dot-notation to access state objects instead of the states() function."
+    },
+    {
+      "id": "FG20",
+      "name": "Redundant default() Before Typed Filter",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Chaining | default(N) immediately before a typed filter (float, int, bool, as_timestamp) that already accepts a positional fallback with the same value, creating a confusing dual-path that implies the default is doing real work."
+    },
+    {
+      "id": "FG21",
+      "name": "Silent Attribute Persistence Failure Above 16384 Bytes",
+      "domain": "Systemic Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "Trigger-based template sensor uses an unbounded dict-merge write pattern with no byte-length pre-check; HA recorder silently drops attribute blobs exceeding 16,384 bytes with no error raised."
     },
     {
       "id": "FG22",
