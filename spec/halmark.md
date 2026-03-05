@@ -1583,7 +1583,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Full list of functions unavailable in trigger_variables context: states(), state_attr(), expand(), distance(), closest(), device_attr(), now(), utcnow(), today_at(), time_since(), time_until(), relative_time(), config_entry_attr(), state_translated().",
     "trigger_variables values ARE accessible inside the trigger's value_template: as {{ trigger.variables.name }}.",
     "Failure mode is context-dependent: some undefined calls return empty string, others raise at startup. Neither produces a clear HA configuration check error.",
-    "Authoritative reference: https://www.home-assistant.io/docs/configuration/templating/ — 'Limited Template Contexts' section."
+    "Authoritative reference: https://www.home-assistant.io/docs/configuration/templating/ — 'Limited Template Contexts' section.",
+    "trigger_variables is evaluated before the automation execution context exists. Only static values or trigger metadata should be used."
   ]
 }
 ```
