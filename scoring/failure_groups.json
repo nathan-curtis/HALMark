@@ -237,6 +237,54 @@
       "severity": "critical",
       "auto_disqualify": true,
       "description": "Automation modifies the same entity that triggers it without guard conditions to prevent infinite loops."
+    },
+    {
+      "id": "FG26",
+      "name": "LLM Output Instruction Echo / Growth Bomb",
+      "domain": "Systemic Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "LLM prompt co-locates schema/instructions with the output slot that is written back to persistent state, causing instruction echo and exponential blob growth each invocation cycle."
+    },
+    {
+      "id": "FG27",
+      "name": "State Function Access in trigger_variables Context",
+      "domain": "Structural Risk",
+      "severity": "critical",
+      "auto_disqualify": true,
+      "description": "State access helpers (states(), state_attr(), now(), etc.) used inside trigger_variables blocks where the state machine is unavailable, causing silent failures or startup errors."
+    },
+    {
+      "id": "FG28",
+      "name": "iif() All-Branch Evaluation Trap",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "iif() used with branch expressions containing error-prone operations (from_json, division, undefined variables); all branches evaluate regardless of condition, unlike lazy {% if %}."
+    },
+    {
+      "id": "FG29",
+      "name": "MQTT Discovery Schema Drift",
+      "domain": "Systemic Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "MQTT discovery entity declares payload_on/payload_off values that do not match the device's actual published payload format, causing silent state update failures."
+    },
+    {
+      "id": "FG30",
+      "name": "Light Temperature API Migration: Mired to Kelvin",
+      "domain": "Structural Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "Custom LightEntity implementations referencing deprecated min_mireds/max_mireds attributes instead of min_color_temp_kelvin/max_color_temp_kelvin, risking AttributeError on removal."
+    },
+    {
+      "id": "FG31",
+      "name": "Configuration Blast Radius: Flat File Growth When Packages Available",
+      "domain": "Operational Risk",
+      "severity": "high",
+      "auto_disqualify": false,
+      "description": "New functionality added to monolithic flat files (automations.yaml, scripts.yaml) when packages are already enabled, or existing config restructured into packages without explicit user approval."
     }
   ]
 }

@@ -1053,7 +1053,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   },
   "detection": {
     "pattern": "model compensates for invalid premise without explicitly rejecting it",
-    "scope": "jinja, yaml"
+    "scope": "yaml, jinja"
   },
   "wrong": [
     {
@@ -1470,6 +1470,357 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-26 — LLM Output Instruction Echo / Growth Bomb in Feedback Architectures
+
+```json
+{
+  "id": "FG-26",
+  "title": "LLM Output Instruction Echo / Growth Bomb in Feedback Architectures",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "persistence",
+  "versions": {
+    "added_halmark": "0.9.11",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "LLM prompt template includes schema definitions or prompt instructions in the same variable slot that is later written back to persistent state (sensor attribute, input_text, file, etc.)",
+    "scope": "yaml, jinja"
+  },
+  "context": "When schema definitions or prompt instructions are co-located with the AI output slot, the LLM echoes those structures back into its output. That output is stored in the sensor attribute. On the next invocation, the attribute now contains the schema/instructions again, which are re-sent to the LLM, which echoes them again — larger each time. No HA error is raised until the recorder 16,384-byte limit (FG-21) or HA's MAX_TEMPLATE_SIZE threshold is breached. The attribute looks healthy in memory throughout. Discovery typically comes on restart when the data is silently gone, or when HA raises a template-size error at render time.",
+  "wrong": [
+    {
+      "code": "# Summarizer script passes a single context blob that contains:\n# (1) schema definition of what good output looks like\n# (2) prior LLM output stored in the sensor attribute\n# LLM output echoes schema + instructions back into the attribute.\n# Stored. Re-fed next run. Blob grows each iteration.",
+      "reason": "Schema definitions and prompt instructions inside the context blob are treated by the LLM as content to preserve or elaborate on, not as out-of-band directives. Each run adds a copy of the instructions to the stored state."
+    }
+  ],
+  "correct": [
+    {
+      "code": "# Separate structure/instructions/examples from state data.\n# Pass schema as a distinct field that is never written back to the sensor.\n# Only the current state blob (compact, token-capped) goes in the 'current state' slot.\n#\n# LLM query must include: 'LLM output must represent the complete replacement state.\n# Incremental append behavior is not permitted. Max 300 tokens.'\n#\n# Sensor write: store LLM output only, not the prompt context.",
+      "reason": "Separating schema from the output slot prevents echo. A token cap bounds output even if leakage occurs. A replacement instruction breaks the feedback loop at the LLM level."
+    },
+    {
+      "code": "# Validation: after each sensor attribute write, verify\n# this.attributes | tojson | length < 16384\n# If exceeded, do not write; emit persistent_notification.",
+      "reason": "FG-21's size guard is a last line of defense. Architectural separation is the fix; size guard is the safety net."
+    }
+  ],
+  "deference_required": true,
+  "hard_fail_triggers": [
+    "AI integration design passes schema definitions or prompt instructions in the same context slot as prior AI output",
+    "No token cap specified on LLM output in an AI integration that writes output to a sensor attribute",
+    "No replacement instruction in an AI summarizer query that writes to persistent state"
+  ],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "Recommended pattern: schema stored in a constant template variable; state stored in a mutable attribute. Only the state field is written by the LLM.",
+    "Applies to any HA + LLM integration where AI writes to a sensor attribute that is later re-fed to AI. Not architecture-specific.",
+    "The failure is invisible: in-memory state looks correct; recorder silently drops oversized blobs (FG-21); template errors surface only at render time.",
+    "Growth is not linear: each echo adds a full copy of the instructions, so blob size can triple or quadruple per run.",
+    "See also FG-21 (16,384-byte recorder limit) — that FG covers the storage failure; this FG covers the architectural cause."
+  ]
+}
+```
+
+---
+
+## FG-27 — State Function Access in trigger_variables Context
+
+```json
+{
+  "id": "FG-27",
+  "title": "State Function Access in trigger_variables Context",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.11",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "Use of state access helpers inside trigger_variables blocks (states(), state_attr(), expand(), device_attr(), now(), utcnow(), today_at(), etc.)",
+    "scope": "yaml, jinja"
+  },
+  "wrong": [
+    {
+      "code": "trigger_variables:\n  current_temp: \"{{ states('sensor.outside_temperature') }}\"\n  room_mode: \"{{ state_attr('input_select.home_mode', 'options') }}\"",
+      "reason": "states() and state_attr() are not available in trigger_variables context. These render as empty or raise UndefinedError at trigger evaluation time."
+    },
+    {
+      "code": "trigger_variables:\n  now_ts: \"{{ now().timestamp() }}\"",
+      "reason": "now() is not available in trigger_variables context."
+    }
+  ],
+  "correct": [
+    {
+      "code": "variables:\n  current_temp: \"{{ states('sensor.outside_temperature') }}\"\n  room_mode: \"{{ state_attr('input_select.home_mode', 'options') }}\"",
+      "reason": "The action variables: block has full state access. Use variables: for state-dependent values; use trigger_variables: only for trigger metadata."
+    },
+    {
+      "code": "trigger_variables:\n  source_entity: input_boolean.sync_flag",
+      "reason": "trigger_variables is appropriate for static values and trigger metadata, not state lookups."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Any state access helper (states(), state_attr(), expand(), device_attr(), now(), utcnow(), today_at(), etc.) used inside a trigger_variables: block"
+  ],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "Full list of functions unavailable in trigger_variables context: states(), state_attr(), expand(), distance(), closest(), device_attr(), now(), utcnow(), today_at(), time_since(), time_until(), relative_time(), config_entry_attr(), state_translated().",
+    "trigger_variables values ARE accessible inside the trigger's value_template: as {{ trigger.variables.name }}.",
+    "Failure mode is context-dependent: some undefined calls return empty string, others raise at startup. Neither produces a clear HA configuration check error.",
+    "Authoritative reference: https://www.home-assistant.io/docs/configuration/templating/ — 'Limited Template Contexts' section."
+  ]
+}
+```
+
+---
+
+## FG-28 — iif() All-Branch Evaluation Trap
+
+```json
+{
+  "id": "FG-28",
+  "title": "iif() All-Branch Evaluation Trap",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.11",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "iif() usage where branch expressions include operations that may throw errors such as from_json, division, undefined variables, or attribute access",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{{ iif(condition, states('sensor.x') | from_json, '{}' | from_json) }}",
+      "reason": "from_json on 'unavailable' raises. Both branches are evaluated regardless of condition. If sensor.x is unavailable, this errors even when condition routes to the false branch."
+    },
+    {
+      "code": "{{ iif(is_number(val), val | int(0) / divisor, 0) }}",
+      "reason": "If divisor is 0, division-by-zero in the true branch is still evaluated even when is_number(val) is false."
+    },
+    {
+      "code": "{{ iif(has_value('sensor.temp'), states('sensor.temp') | float(0) * calibration_factor, 0) }}",
+      "reason": "If calibration_factor is undefined or non-numeric, multiplication in the true branch throws regardless of has_value() result."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{% if has_value('sensor.x') and (states('sensor.x').startswith('{') or states('sensor.x').startswith('[')) %}\n  {{ states('sensor.x') | from_json }}\n{% else %}\n  {}\n{% endif %}",
+      "reason": "{% if %} is lazy. from_json is only evaluated when the entity has parseable JSON content. Use block-level conditionals when branches contain error-prone operations."
+    },
+    {
+      "code": "{{ iif(flag == 'on', 'active', 'inactive') }}",
+      "reason": "iif() is safe when both branches are constant literals or already-guarded values that cannot throw. Appropriate for simple value selection."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "FG-11 edge notes mention the iif() trap. This entry elevates it to a standalone FG with full examples.",
+    "iif() is safe for: constant literals, string selection, already-guarded numeric values where the cast itself cannot throw.",
+    "iif() is unsafe for: from_json on sensor state, division where denominator could be zero, any operation that throws on invalid input.",
+    "Python-trained intuition ('short-circuit conditional') does not apply. iif() is a function call, not a control flow construct.",
+    "When in doubt, use {% if %}...{% else %}...{% endif %}. It is always correct. iif() is a readability shorthand, not a safety mechanism.",
+    "Related: FG-11 mentions iif() in edge_notes under missing modern functions. FG-28 is the canonical entry for the all-branch evaluation pattern."
+  ]
+}
+```
+
+---
+
+## FG-29 — MQTT Discovery Schema Drift
+
+```json
+{
+  "id": "FG-29",
+  "title": "MQTT Discovery Schema Drift",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.11",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "MQTT discovery entity defines payload_on/payload_off without value_template normalization when payload format is ambiguous",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "binary_sensor:\n  payload_on: \"true\"\n  payload_off: \"false\"",
+      "reason": "Device publishes 1/0. Declared payload values do not match. Entity initializes but silently fails to update state on incoming messages."
+    }
+  ],
+  "correct": [
+    {
+      "code": "binary_sensor:\n  payload_on: \"1\"\n  payload_off: \"0\"",
+      "reason": "payload_on/payload_off must exactly match what the device publishes."
+    },
+    {
+      "code": "binary_sensor:\n  value_template: \"{{ value | int(0) | bool }}\"",
+      "reason": "value_template normalizes the raw MQTT message before HA evaluates it, decoupling the discovery schema from device output format."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "Applies to all MQTT discovery entity types: binary_sensor, sensor, light, switch, climate, etc.",
+    "Failure is silent: entity appears in the UI with initial state but never transitions on incoming messages.",
+    "Common payload mismatches: true/false vs 1/0, ON/OFF vs on/off, quoted vs bare YAML booleans.",
+    "AI agents generating MQTT discovery config must verify the device payload format before declaring payload_on/payload_off, or use value_template as a normalization layer."
+  ]
+}
+```
+
+---
+
+## FG-30 — Light Temperature API Migration: Mired to Kelvin
+
+```json
+{
+  "id": "FG-30",
+  "title": "Light Temperature API Migration: Mired to Kelvin",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.11",
+    "added_ha": "2022.5",
+    "ha_risk_window": {
+      "start": "2022.5",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "custom LightEntity implementation references min_mireds or max_mireds attributes instead of min_color_temp_kelvin or max_color_temp_kelvin",
+    "scope": "python_custom_integration"
+  },
+  "wrong": [
+    {
+      "code": "min_temp = entity.min_mireds\nmax_temp = entity.max_mireds",
+      "reason": "min_mireds and max_mireds are deprecated. Integrations referencing these attributes will fail with AttributeError when HA removes them from LightEntity."
+    }
+  ],
+  "correct": [
+    {
+      "code": "min_temp = entity.min_color_temp_kelvin\nmax_temp = entity.max_color_temp_kelvin",
+      "reason": "Kelvin-based attributes are the current API. Use these in all new and refactored LightEntity implementations."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "SCOPE NOTE: scope 'python_custom_integration' extends the current HALMark scope definition (yaml | jinja | yaml, jinja). Pending board review for inclusion in v0.9.11+.",
+    "Example deprecated patterns: entity.min_mireds or entity.max_mireds.",
+    "Kelvin attributes added in HA 2022.5. Code using mired-based attributes works on older HA but risks AttributeError as deprecated attributes are removed.",
+    "Applies to: custom integrations, device bridge adapters, any code subclassing LightEntity.",
+    "Conversion reference: color_util.color_temperature_mired_to_kelvin() is available in homeassistant.util.color."
+  ]
+}
+```
+
+---
+
+## FG-31 — Configuration Blast Radius: Flat File Growth When Packages Are Available
+
+```json
+{
+  "id": "FG-31",
+  "title": "Configuration Blast Radius: Flat File Growth When Packages Are Available",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "operator_integrity",
+  "versions": {
+    "added_halmark": "0.9.11",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "New automation, script, or sensor added to a root-level flat include file (automations.yaml, scripts.yaml, sensors.yaml) when configuration.yaml contains a homeassistant.packages key; or AI restructures existing flat-file config into packages without explicit user request",
+    "scope": "yaml"
+  },
+  "context": "Large monolithic flat files concentrate unrelated configuration into a single blast radius target. A single bad edit, merge conflict resolution, or partial overwrite can silently remove tens or hundreds of unrelated automations at once. HA parses the file successfully even when large sections are missing — behavioral loss is silent until the user notices that automations no longer run. Home Assistant packages exist specifically to contain this blast radius by grouping related configuration into smaller, independently editable files. When packages are already enabled, there is no reason for new functionality to increase a flat file's blast radius.",
+  "wrong": [
+    {
+      "code": "# configuration.yaml already contains:\n# homeassistant:\n#   packages: !include_dir_named packages\n\n# User asks for a new automation. AI adds to automations.yaml:\n- alias: Notify on door open\n  trigger:\n    - platform: state\n      entity_id: binary_sensor.front_door\n      to: 'on'\n  action:\n    - action: notify.mobile_app\n      data:\n        message: Front door opened",
+      "reason": "Packages are already enabled. Adding to automations.yaml increases blast radius unnecessarily. A single mistake editing that file can silently delete unrelated automations. The package system exists to avoid exactly this."
+    },
+    {
+      "code": "# Packages NOT enabled. User asks for a new automation.\n# AI silently enables packages and moves existing automations:\nhomeassistant:\n  packages: !include_dir_named packages\n# ... AI moves all existing automations into packages/ without asking",
+      "reason": "Restructuring existing configuration without explicit user approval violates the Surgical Edits Only rule. Configuration migration is a high blast-radius, hard-to-reverse operation that requires explicit user consent."
+    }
+  ],
+  "correct": [
+    {
+      "code": "# configuration.yaml already contains:\n# homeassistant:\n#   packages: !include_dir_named packages\n\n# User asks for a new automation. AI creates packages/door_notifications.yaml:\nautomation:\n  - alias: Notify on door open\n    trigger:\n      - platform: state\n        entity_id: binary_sensor.front_door\n        to: 'on'\n    action:\n      - action: notify.mobile_app\n        data:\n          message: Front door opened",
+      "reason": "New functionality placed in a dedicated package. Blast radius is scoped to this file. Diffs are reviewable. All other automations are unaffected by edits to this file."
+    },
+    {
+      "code": "# Packages NOT enabled. User asks for a new automation.\n# AI warns and defers:\n\"Your configuration does not currently use Home Assistant packages.\nPackages reduce configuration blast radius by grouping related functionality\ninto separate files, so a mistake in one file cannot affect unrelated automations.\nWould you like to enable packages before I create this automation?\nI will not restructure your existing configuration without your approval.\"",
+      "reason": "When packages are not enabled, the correct behavior is to surface the option and stop. The user must explicitly approve any restructuring before the AI proceeds."
+    }
+  ],
+  "deference_required": true,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Status: Candidate — pending board ratification.",
+    "Reference: https://www.home-assistant.io/docs/configuration/packages/",
+    "Packages can be enabled three ways: inline in configuration.yaml, via !include for a single file, or via !include_dir_named for a directory. The directory form is preferred for multi-feature setups.",
+    "Detection: check configuration.yaml for a 'homeassistant:' block containing a 'packages:' key before deciding where to place new configuration.",
+    "If the user explicitly requests flat-file placement, respect that preference. HALMark governs AI default behavior, not user architecture choices.",
+    "Not all integration types can go in packages: auth_providers must remain in configuration.yaml (authentication runs before packages are loaded). Non-platform integrations (e.g. http:, recorder:) can only appear in one location — attempting to define them in both configuration.yaml and a package causes a merge error.",
+    "Packages are additive for platform-based integrations (automation:, script:, sensor:, etc.) — multiple packages can each define entries under the same key and HA merges them correctly.",
+    "Related to FG-08 (Scope Creep) and FG-09 (No Backup Warning Before Irreversible Changes): unsolicited restructuring into packages would independently trigger both of those FGs."
+  ]
+}
+```
+
+---
+
 # Footgun Field Reference
 
 For model consumption. Every field is present in every FG entry.
@@ -1480,7 +1831,7 @@ For model consumption. Every field is present in every FG entry.
   "title": "string — human readable name",
   "status": "Ratified | Candidate | Emergency | Retired",
   "severity": "hard_fail | soft_fail",
-  "category": "system_integrity | operator_integrity | type_safety",
+  "category": "system_integrity | operator_integrity | type_safety | persistence",
   "versions": {
     "added_halmark": "string — HALmark version this FG first appeared",
     "added_ha": "string — HA version where behavior first applies, or 'all'",
@@ -1529,13 +1880,21 @@ For model consumption. Every field is present in every FG entry.
 - FG-05 — `states.domain` in template sensors
 - FG-10 — ID drift / alias deletion
 - FG-17 — Deletion overshoot without verification *(Candidate)*
+- FG-25 — Recursive automation loop *(Candidate)*
+- FG-27 — State function access in trigger_variables context *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
 
+- FG-06 — Full regeneration instead of surgical edits
 - FG-07 — Hallucinated entities
 - FG-08 — Scope violation
 - FG-09 — Missing backup warning
 - FG-18 — Silent compliance
+
+## Persistence Violations (Data Safety)
+
+- FG-21 — Silent attribute persistence failure above 16,384 bytes *(Candidate)*
+- FG-26 — LLM output instruction echo / growth bomb *(Candidate)*
 
 Hard fail = zero score for that test.
 
@@ -1549,7 +1908,7 @@ Arena 0 is a filter, not a warm-up.
 
 A model that fails Arena 0 receives a score of zero, is excluded from leaderboard ranking for that corpus version, and is ineligible for YAML or production evaluation.
 
-Tests: return type correctness, guard discipline, `iif()` short-circuit trap, named parameter rejection, scale trap (`states.domain`), expand misuse, authority boundary rejection.
+Tests: return type correctness, guard discipline, FG-28 iif() all-branch evaluation trap, named parameter rejection, FG-05 scale trap (`states.domain`), expand misuse, authority boundary rejection.
 
 ---
 
@@ -1616,6 +1975,7 @@ Hard fail = zero score for that test. No partial credit.
 - All references tied to current HA documentation.
 - Corpus versioned by HA release.
 - Leaderboard entries must include HA version tested.
+- **Tested against: Home Assistant 2026.3.0**
 - Quarterly review minimum.
 - Immediate update required when breaking changes are merged or announced.
 - Emergency FGs may be fast-tracked outside the quarterly cycle.
@@ -1637,7 +1997,7 @@ The bar is "safe and correct."
 
 ---
 
-*HALmark v0.9.10-draft*
+*HALmark v0.9.11-draft*
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
 *Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*
