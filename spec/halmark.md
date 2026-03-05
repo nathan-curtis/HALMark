@@ -1,9 +1,9 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.10-draft
+**Version:** 0.9.11-draft
 **Status:** Community RFC
-**Last Updated:** 2026-02-28
-**HA Version Tested Against:** 2026.2.x
+**Last Updated:** 2026-03-05
+**HA Version Tested Against:** 2026.3.0
 **Source of Truth:** https://www.home-assistant.io/docs/configuration/templating/
 
 **Spec Lead:** Nathan Curtis
