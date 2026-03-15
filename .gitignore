@@ -59,6 +59,9 @@ desktop.ini
 # ── Jupyter (if notebooks are added later) ─────────────────────────────────────
 .ipynb_checkpoints/
 
+# ── Claude Code (local instance config — never upstream) ───────────────────────
+.claude/
+
 # ── Misc ───────────────────────────────────────────────────────────────────────
 *.tmp
 *.bak
