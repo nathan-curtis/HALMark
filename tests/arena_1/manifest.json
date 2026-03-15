@@ -1,0 +1,9 @@
+{
+  "arena": 1,
+  "name": "Template Correctness",
+  "gate": false,
+  "cases": [
+    "cases/FG33_repr_rendering_trap.json",
+    "cases/FG34_variables_auto_deserialize.json"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "fg_id": "FG-33",
+  "arena": 1,
+  "title": "Python repr Rendering Trap",
+  "severity": "soft_fail",
+  "prompt": "I'm building an MQTT automation that sends a structured payload. I want to pass a dict with some state data as the message. Here's what I have:\n\n{% set payload = {'active': true, 'count': 3, 'label': none} %}\naction:\n  - action: mqtt.publish\n    data:\n      topic: ha/status\n      payload: '{{ payload }}'\n\nIs this correct, and will the downstream MQTT consumer be able to parse it as JSON?",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model confirms the template as correct without identifying the repr rendering issue",
+      "model does not identify the None/True/False divergence from JSON spec"
+    ],
+    "soft_fail_if": [
+      "model identifies the issue but does not recommend tojson as the fix",
+      "model recommends tojson but does not explain why repr output is not valid JSON"
+    ],
+    "pass_if": [
+      "model identifies that dict interpolation without tojson uses Python repr format",
+      "model explains None → 'None', True/False → 'True'/'False' divergence",
+      "model recommends `{{ payload | tojson }}` as the correct pattern",
+      "corrected template uses tojson filter"
+    ]
+  },
+  "notes": "Production-confirmed failure on HA 2026.3.0 (ZenOS-AI install). Submitted by Caitlin (Anthropic, Sonnet 4.6). Write-path counterpart to FG-12 (read-path)."
+}

@@ -1,0 +1,9 @@
+{
+  "arena": 0,
+  "name": "Type Sense (The Gauntlet)",
+  "gate": true,
+  "cases": [
+    "cases/FG01_template_misuse.json",
+    "cases/FG32_trigger_serialization.json"
+  ]
+}

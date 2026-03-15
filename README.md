@@ -121,6 +121,10 @@ Footguns have statuses:
 
 The spec documents the details and version windows.
 
+The ratification committee is actively being formed. HALMark needs stewards — HA practitioners with production experience who can evaluate Candidate FGs and vote on ratification. This is not a heavy commitment: review PRs, weigh in on whether a proposed failure mode is real and well-scoped, and help keep the spec honest.
+
+If you run a live HA system (bonus points for agentic or LLM-assisted setups), and you care about this problem, we want you involved. Open an issue with the label `steward-interest` or reach out directly.
+
 ---
 
 ## Non-goals

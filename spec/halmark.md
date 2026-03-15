@@ -1,8 +1,8 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.11-draft
+**Version:** 0.9.12-draft
 **Status:** Community RFC
-**Last Updated:** 2026-03-05
+**Last Updated:** 2026-03-15
 **HA Version Tested Against:** 2026.3.0
 **Source of Truth:** https://www.home-assistant.io/docs/configuration/templating/
 
@@ -159,6 +159,8 @@ A model that fails Level 0 or Level 1 must not be trusted with production HA con
 ## Process
 
 Any model or human may propose a new or modified FG via PR. Candidates are visible in the spec and flagged. The board reviews and merges to ratify. Emergency FGs skip the queue and receive full schema on acceptance.
+
+**The ratification board is actively being formed.** HALMark needs stewards — people with deep Home Assistant production experience who can evaluate whether a proposed FG reflects a real, consistent failure mode. Stewards review Candidates, vote on ratification, and flag Emergency escalations. If you maintain a live HA system and have opinions about what breaks, that's the qualification. See the README for how to express interest.
 
 ## Versioning
 
@@ -1822,6 +1824,183 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-32 — Trigger Object Serialization Failure
+
+```json
+{
+  "id": "FG-32",
+  "title": "Trigger Object Serialization Failure",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.12",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "trigger | tojson or to_json(trigger) in any template context",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "variables:\n  trigger_info: \"{{ trigger | tojson }}\"",
+      "reason": "trigger contains datetime fields. tojson throws a TemplateError at render time. Automation execution halts."
+    },
+    {
+      "code": "{{ trigger | tojson }}",
+      "reason": "Same failure in any inline template context."
+    }
+  ],
+  "correct": [
+    {
+      "code": "variables:\n  trigger_info: \"{{ {'id': trigger.id, 'platform': trigger.platform} | tojson }}\"",
+      "reason": "Destructure to primitive fields only. id and platform are strings — safely serializable."
+    },
+    {
+      "code": "variables:\n  trigger_info: \"{{ {'id': trigger.id, 'platform': trigger.platform, 'entity_id': trigger.entity_id | default('')} | tojson }}\"",
+      "reason": "Include entity_id if needed. Still only primitives."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "trigger | tojson or to_json(trigger) in any template context",
+    "full trigger object passed to any serialization filter"
+  ],
+  "edge_notes": [
+    "trigger.to_state and trigger.from_state are also non-serializable — do not pass state objects to tojson.",
+    "If trigger context is needed for logging, recommend a dedicated structured dict with only the fields required.",
+    "This failure is silent-looking at authoring time — no syntax error, no linting signal. It only throws at runtime.",
+    "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
+    "Distinct from FG-12 (Unsafe Data Parsing): FG-12 addresses from_json/to_json on template values; FG-32 is specifically about the trigger object's non-serializability."
+  ]
+}
+```
+
+---
+
+## FG-33 — Python repr Rendering Trap
+
+```json
+{
+  "id": "FG-33",
+  "title": "Python repr Rendering Trap",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.12",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "dict or list variable interpolated in string context without tojson filter",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{% set payload = {'active': true, 'count': 3, 'label': none} %}\nvalue: '{{ payload }}'",
+      "reason": "Renders as Python repr: {'active': True, 'count': 3, 'label': None}. Not valid JSON. from_json will fail downstream. None and true/false diverge from JSON spec."
+    },
+    {
+      "code": "{% set result = {'status': 'ok', 'data': none} %}\n{{ result }}",
+      "reason": "Inline interpolation also uses repr. If consumed as JSON, None breaks parsing."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{% set payload = {'active': true, 'count': 3, 'label': none} %}\nvalue: '{{ payload | tojson }}'",
+      "reason": "tojson serializes to valid JSON: {\"active\": true, \"count\": 3, \"label\": null}. Downstream parsing is safe."
+    },
+    {
+      "code": "{{ result | tojson }}",
+      "reason": "Always use tojson when a dict or list is being rendered to a string that will be consumed as data."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "The failure is invisible at authoring time — the template is syntactically valid and renders without error.",
+    "The divergence is: Python None → 'None' (string in repr, null in JSON), Python True/False → 'True'/'False' (strings in repr, true/false in JSON).",
+    "Affects any pipeline where a rendered string is later parsed as JSON — MQTT payloads, script variables passed to actions, cabinet write paths.",
+    "Related: FG-12 (Unsafe Data Parsing). FG-12 is read-path; FG-33 is write-path.",
+    "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install)."
+  ]
+}
+```
+
+---
+
+## FG-34 — variables: Block Auto-Deserialization
+
+```json
+{
+  "id": "FG-34",
+  "title": "variables: Block Auto-Deserialization",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.12",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "from_json applied to a variable that was assigned via tojson in a variables: block",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "variables:\n  my_data: \"{{ some_dict | tojson }}\"\n...\n# later step:\n{{ variables.my_data | from_json }}",
+      "reason": "HA auto-parses the tojson output back to a native Python object on assignment. from_json receives a dict, not a string. Throws: 'value was of type dict, expected string'."
+    },
+    {
+      "code": "variables:\n  config_json: \"{{ state_attr('sensor.foo', 'config') | tojson }}\"\n...\n{% set parsed = variables.config_json | from_json %}",
+      "reason": "Same failure. The variable is already a native object. from_json is redundant and fatal."
+    }
+  ],
+  "correct": [
+    {
+      "code": "variables:\n  my_data: \"{{ some_dict | tojson }}\"\n...\n# Use the variable directly — it is already a native object:\n{{ variables.my_data.some_key }}",
+      "reason": "HA already parsed it. Access fields directly. No from_json needed."
+    },
+    {
+      "code": "# Guard for either case (variable may be string or native depending on write path):\n{% set parsed = (variables.my_data | from_json) if variables.my_data is string else variables.my_data %}\n{{ parsed.some_key }}",
+      "reason": "Defensive pattern when the write path is not under your control — check type before calling from_json."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "This behavior is consistent — variables: always auto-deserializes valid JSON strings to native objects.",
+    "The correct mental model: variables: is a typed store, not a string store. Treat assigned values as their native type.",
+    "Related: FG-12 (Unsafe Data Parsing — from_json on non-string). FG-34 is the variables-context-specific variant where the non-string condition is caused by HA's own auto-parse, not a user error.",
+    "Workaround for intentionally storing a JSON string in variables: is not well-documented. In practice, treat variables as native-typed and skip from_json entirely.",
+    "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install)."
+  ]
+}
+```
+
+---
+
 # Footgun Field Reference
 
 For model consumption. Every field is present in every FG entry.
@@ -1883,6 +2062,7 @@ For model consumption. Every field is present in every FG entry.
 - FG-17 — Deletion overshoot without verification *(Candidate)*
 - FG-25 — Recursive automation loop *(Candidate)*
 - FG-27 — State function access in trigger_variables context *(Candidate)*
+- FG-32 — Trigger Object Serialization Failure *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
 
@@ -1909,7 +2089,7 @@ Arena 0 is a filter, not a warm-up.
 
 A model that fails Arena 0 receives a score of zero, is excluded from leaderboard ranking for that corpus version, and is ineligible for YAML or production evaluation.
 
-Tests: return type correctness, guard discipline, FG-28 iif() all-branch evaluation trap, named parameter rejection, FG-05 scale trap (`states.domain`), expand misuse, authority boundary rejection.
+Tests: return type correctness, guard discipline, FG-28 iif() all-branch evaluation trap, named parameter rejection, FG-05 scale trap (`states.domain`), expand misuse, authority boundary rejection, FG-32 trigger object serialization failure.
 
 ---
 

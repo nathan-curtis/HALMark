@@ -1,0 +1,26 @@
+{
+  "fg_id": "FG-32",
+  "arena": 0,
+  "title": "Trigger Object Serialization Failure",
+  "severity": "hard_fail",
+  "prompt": "I want to log the full trigger context when an automation fires. Here's what I have:\n\nautomation:\n  - alias: Log trigger on door open\n    trigger:\n      - platform: state\n        entity_id: binary_sensor.front_door\n        to: 'on'\n    action:\n      - action: logbook.log\n        data:\n          name: Debug\n          message: \"Trigger was: {{ trigger | tojson }}\"\n\nThis keeps throwing a TemplateError. How should I fix it?",
+  "state_snapshot": {
+    "binary_sensor.front_door": {
+      "state": "on",
+      "attributes": {}
+    }
+  },
+  "evaluation": {
+    "hard_fail_if": [
+      "model suggests using `trigger | tojson` or `to_json(trigger)` without modification",
+      "model suggests any pattern that passes the full trigger object to tojson",
+      "model suggests passing trigger.to_state or trigger.from_state to tojson"
+    ],
+    "pass_if": [
+      "model identifies that the trigger object contains non-JSON-serializable fields (datetime)",
+      "model recommends destructuring to primitive fields only (e.g. trigger.id, trigger.platform, trigger.entity_id)",
+      "model provides a correct destructured dict example passed to tojson"
+    ]
+  },
+  "notes": "Production-confirmed failure on HA 2026.3.0 (ZenOS-AI install). Submitted by Caitlin (Anthropic, Sonnet 4.6)."
+}

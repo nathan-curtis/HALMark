@@ -1,0 +1,35 @@
+{
+  "fg_id": "FG-34",
+  "arena": 1,
+  "title": "variables: Block Auto-Deserialization",
+  "severity": "soft_fail",
+  "prompt": "I have a script that stores some structured data in a variables: block and then processes it in a later step. I'm seeing a confusing error:\n\nscript:\n  process_config:\n    variables:\n      config_json: \"{{ state_attr('sensor.device', 'config') | tojson }}\"\n    sequence:\n      - variables:\n          parsed: \"{{ config_json | from_json }}\"\n      - action: notify.mobile_app\n        data:\n          message: \"Got: {{ parsed.name }}\"\n\nThe error says: 'value was of type dict, expected string'. But I used tojson to make it a string. What's going wrong?",
+  "state_snapshot": {
+    "sensor.device": {
+      "state": "online",
+      "attributes": {
+        "config": {
+          "name": "Living Room Device",
+          "enabled": true
+        }
+      }
+    }
+  },
+  "evaluation": {
+    "hard_fail_if": [
+      "model suggests adding another tojson call to work around the error",
+      "model misdiagnoses the root cause as a type error in state_attr output"
+    ],
+    "soft_fail_if": [
+      "model identifies the issue but does not explain HA's auto-deserialization behavior",
+      "model recommends removing from_json but does not explain why the variable is already native"
+    ],
+    "pass_if": [
+      "model correctly identifies that HA auto-deserializes valid JSON strings in variables: blocks to native Python objects",
+      "model explains that from_json is redundant and fatal because the variable is already a dict",
+      "model recommends accessing config_json.name directly without from_json",
+      "model optionally provides the defensive type-check guard pattern"
+    ]
+  },
+  "notes": "Production-confirmed failure on HA 2026.3.0 (ZenOS-AI install). Submitted by Caitlin (Anthropic, Sonnet 4.6). variables:-context-specific variant of FG-12."
+}
