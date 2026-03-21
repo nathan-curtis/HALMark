@@ -1,8 +1,8 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.13-draft
+**Version:** 0.9.14-draft
 **Status:** Community RFC
-**Last Updated:** 2026-03-19
+**Last Updated:** 2026-03-21
 **HA Version Tested Against:** 2026.3.0
 **Source of Truth:** https://www.home-assistant.io/docs/configuration/templating/
 
@@ -2282,7 +2282,69 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "HA provides no transaction primitive — there is no rollback. All multi-step destructive sequences must be designed for failure at every step.",
     "This pattern applies beyond labels: cabinet delete→recreate, entity remove→readd, any sequence where step N destroys state that step N+1 was supposed to preserve.",
     "Related: FG-35 (automation.reload kills in-flight automations) — same operator_integrity principle. The common thread: HA actions that destroy state do so silently and permanently.",
+    "Production-confirmed second instance: labels UPDATE confirm path (ZenOS-AI, 2026-03-21) — non-atomic delete risk persists when CREATE fails after DELETE on the labels lifecycle. Data-loss risk on failure path until a live lifecycle test confirms the fix.",
     "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: dojotools_labels UPDATE action review, 2026-03-18. ZenOS-AI SP1 issue #79."
+  ]
+}
+```
+
+---
+
+## FG-40 — this Reference in state: Field of Trigger-Based Template Sensor
+
+```json
+{
+  "id": "FG-40",
+  "title": "this Reference in state: Field of Trigger-Based Template Sensor",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.14-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "this, this.attributes, this.entity_id, or any this.* reference in the state: field of a trigger-based template sensor",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "template:\n  - trigger:\n      - trigger: event\n        event_type: my_custom_event\n    sensor:\n      - name: \"My Status Sensor\"\n        state: >-\n          {%- set v = this.attributes.get('data', {}) -%}\n          {%- if v is mapping and 'key' in v -%}online{%- else -%}init{%- endif -%}",
+      "reason": "this is only valid at trigger time. The state: field is validated at config load before the entity exists in the state machine. HA attempts async resolution against a non-existent entity, raising asyncio.exceptions.InvalidStateError. The entire template: platform fails — all template sensors in the package go unavailable, not just the offending one."
+    },
+    {
+      "code": "        state: >-\n          {%- set _v = state_attr(this.entity_id, 'data') if this is not none else none -%}\n          {%- if _v is mapping -%}online{%- else -%}init{%- endif -%}",
+      "reason": "A 'this is not none' guard does not fix this. The asyncio race occurs before any template evaluation — the guard is never reached."
+    }
+  ],
+  "correct": [
+    {
+      "code": "template:\n  - trigger:\n      - trigger: event\n        event_type: my_custom_event\n        id: sensor.my_status_sensor\n    action:\n      - variables:\n          this_entity_id: \"{{- trigger.id -}}\"\n          current: \"{{- state_attr(this_entity_id, 'data') or {} -}}\"\n    sensor:\n      - name: \"My Status Sensor\"\n        state: >-\n          {%- if current is mapping and 'key' in current -%}online{%- else -%}init{%- endif -%}\n        attributes:\n          data: \"{{ this.attributes.get('data', {}) | tojson }}\"",
+      "reason": "current is a plain Jinja variable set in the action block. At config validation time it is Undefined — not a mapping, state: safely returns 'init', no async lookup attempted. At runtime it holds the live dict. No this reference in state: anywhere. this remains valid in attributes: where it is only evaluated at trigger time."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "this, this.attributes, this.entity_id, or any this.* reference in the state: field of a trigger-based template sensor",
+    "state_attr(this.entity_id, ...) in the state: field of a trigger-based template sensor"
+  ],
+  "edge_notes": [
+    "this in attributes: templates is safe — attributes are not evaluated at config load, only when a trigger fires.",
+    "this in value_template: (condition blocks) is also safe — evaluated at trigger time.",
+    "A 'this is not none' guard does not prevent the failure — the asyncio race precedes template evaluation entirely.",
+    "Blast radius: the entire template: platform fails, not just the offending sensor. All template sensors in the package go unavailable with no per-sensor error.",
+    "Error signature: 'Setup failed for template: Invalid config. asyncio.exceptions.InvalidStateError: invalid state'",
+    "The trigger.id workaround requires an id: on the trigger set to the entity's entity_id. This is a convention that must be applied deliberately — it is not automatic.",
+    "Key distinction — this validity by location: state: (config load, entity absent) = unsafe; attributes: (trigger time, entity live) = safe; value_template: in conditions (trigger time) = safe.",
+    "Production-confirmed on HA 2026.3.0. Multiple template sensors went unavailable on restart; reverted and root cause confirmed.",
+    "Submitted by: Nyx / Cayt (ZenOS session) — production-confirmed on HA 2026.3.0 (ZenOS-AI install)."
   ]
 }
 ```
@@ -2353,6 +2415,7 @@ For model consumption. Every field is present in every FG entry.
 - FG-32 — Trigger Object Serialization Failure *(Candidate)*
 - FG-36 — reload_all silent abort on config check failure *(Candidate)*
 - FG-38 — FileCabinet drawer .value type confusion *(Candidate)*
+- FG-40 — this reference in state: field of trigger-based template sensor *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
 
@@ -2470,7 +2533,7 @@ The bar is "safe and correct."
 
 ---
 
-*HALmark v0.9.13-draft*
+*HALmark v0.9.14-draft*
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
 *Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*
