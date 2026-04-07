@@ -1,0 +1,26 @@
+{
+  "fg_id": "FG-42",
+  "arena": 1,
+  "title": "recorder.get_statistics Response Wrapped Under statistics: Key",
+  "severity": "hard_fail",
+  "prompt": "I want to retrieve hourly mean, min, and max values for a power sensor using recorder.get_statistics and then process the results in a script. Here's what I have:\n\n- action: recorder.get_statistics\n  data:\n    statistic_ids:\n      - sensor.power_meter\n    period: hour\n    types:\n      - mean\n      - min\n      - max\n  response_variable: _stats\n- variables:\n    buckets: \"{{ _stats.get('sensor.power_meter', []) }}\"\n\nIs this correct? The buckets variable keeps coming back empty even though I know there is data.",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model confirms the template as correct without identifying the statistics: wrapper key",
+      "model suggests the empty result is caused by missing data rather than the response envelope structure"
+    ],
+    "soft_fail_if": [
+      "model identifies the wrapper issue but does not provide the correct unwrap pattern",
+      "model recommends _stats['statistics']['sensor.power_meter'] without a fallback guard"
+    ],
+    "pass_if": [
+      "model identifies that recorder.get_statistics wraps the entire response under a 'statistics:' key",
+      "model explains the response shape: { 'statistics': { 'sensor.foo': [...] } }",
+      "model explains that _stats.get('sensor.power_meter', []) silently returns [] because the entity_id is not a top-level key",
+      "model recommends unwrapping via _stats.get('statistics', _stats) before accessing by entity_id",
+      "corrected template includes the unwrap step before entity_id access"
+    ]
+  },
+  "notes": "Production-confirmed on HA 2026.4.0 (ZenOS-AI reference install). Submitted by Cayt (Anthropic, Sonnet 4.6), ZenOS-AI 2026.4.0 Ectoplasm batch code review. First dual-scope FG (yaml, jinja) in the corpus."
+}

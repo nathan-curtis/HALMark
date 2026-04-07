@@ -2354,6 +2354,60 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-42 — recorder.get_statistics Response Wrapped Under statistics: Key
+
+```json
+{
+  "id": "FG-42",
+  "title": "recorder.get_statistics Response Wrapped Under statistics: Key",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.15-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "response_variable from recorder.get_statistics accessed directly by entity_id without unwrapping statistics: key first",
+    "scope": "yaml, jinja"
+  },
+  "wrong": [
+    {
+      "code": "- action: recorder.get_statistics\n  data:\n    statistic_ids:\n      - sensor.power_meter\n    period: hour\n    types:\n      - mean\n      - min\n      - max\n  response_variable: _stats\n- variables:\n    buckets: \"{{ _stats.get('sensor.power_meter', []) }}\"",
+      "reason": "recorder.get_statistics wraps its entire response under a 'statistics:' key. Direct access by entity_id silently returns [] — no error is raised, no warning is logged. The caller receives an empty list and proceeds as if no data exists."
+    }
+  ],
+  "correct": [
+    {
+      "code": "- action: recorder.get_statistics\n  data:\n    statistic_ids:\n      - sensor.power_meter\n    period: hour\n    types:\n      - mean\n      - min\n      - max\n  response_variable: _stats\n- variables:\n    _unwrapped: \"{{ _stats.get('statistics', _stats) if _stats is mapping else {} }}\"\n    buckets: \"{{ _unwrapped.get('sensor.power_meter', []) }}\"",
+      "reason": "_stats.get('statistics', _stats) unwraps the response envelope. The fallback to _stats handles any future HA version that removes the wrapper without breaking the call site."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "response_variable from recorder.get_statistics accessed by entity_id without prior statistics: key unwrap"
+  ],
+  "edge_notes": [
+    "The failure is completely silent: _stats.get('sensor.foo', []) returns [] because the entity_id is not a top-level key — 'statistics' is. HA raises no error and the template continues with empty data.",
+    "The response shape is: { 'statistics': { 'sensor.foo': [ { 'start': ..., 'end': ..., 'mean': ..., ... } ] } }.",
+    "Defensive unwrap pattern: _stats.get('statistics', _stats) — tries the wrapper key first, falls back to the raw response if absent. Stable across HA versions.",
+    "This footgun is not triggered by ZenOS-AI's zen_dojotools_history or zen_dojotools_index scripts — both already apply the unwrap. It surfaces only when a model generates a direct recorder.get_statistics call without going through a ZenOS abstraction layer.",
+    "Production-confirmed on HA 2026.4.0 (ZenOS-AI reference install). Source: dojotools_index.yaml line 1081.",
+    "Submitted by: Cayt (Anthropic, Sonnet 4.6) — source: ZenOS-AI 2026.4.0 Ectoplasm batch code review.",
+    "Schema note: scope field is 'yaml, jinja' — first dual-scope FG in the corpus. The action definition is YAML; the silent failure manifests in the Jinja response access."
+  ]
+}
+```
+
+---
+
 ## FG-41 — as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain
 
 ```json
