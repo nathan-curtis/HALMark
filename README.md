@@ -71,12 +71,22 @@ That file is designed for two audiences at once:
 ## Repository layout
 
 - `spec/halmark.md`  
-  The canonical specification and the master Footgun list.
+  The canonical specification and the master Footgun list. Single source of truth for FG definitions, scoring rules, and compliance levels.
 
-- `README.md`  
-  You are here. Repo overview and how to participate.
+- `tests/arena_N/cases/`  
+  Test case JSON files, one per Footgun per arena. Arena 0 is the hard gate; Arenas 1–4 cover template correctness, YAML integrity, behavioral preservation, and safety/guardrails.
 
-(If you add a harness, corpora, or runners, document them here and keep the spec as the source of truth for rules.)
+- `tests/arena_N/manifest.json`  
+  Arena manifest listing active test cases.
+
+- `docs/releases/`  
+  Per-version release notes.
+
+- `arena/` / `scoring/` / `tools/`  
+  Benchmark runner, model adapters, and validation tooling (scaffolded — active development welcome).
+
+- `results/`  
+  Benchmark run output (gitignored). Only `results/README.md` is committed.
 
 ---
 
@@ -97,7 +107,8 @@ Ways to help:
 
 - Propose new Footguns (production failure modes you have seen)
 - Improve existing Footguns with tighter detection patterns and clearer examples
-- Add or refine arenas, scoring rules, and evaluation corpora
+- **Help frame out the arena test harness** — we are actively building out Arenas 0–4 and the runner that scores model outputs. If you have ideas for test case structure, scoring mechanics, or evaluation prompts, open an issue or PR. The scaffolding is in `arena/`, `scoring/`, and `tools/`.
+- **Submit test case ideas** — good test cases are specific, reproducible, and grounded in real failure modes. Each arena targets a different failure class. See `tests/arena_N/cases/` for existing examples and `spec/halmark.md §Arenas` for the arena definitions.
 - Build runners that can score model outputs deterministically
 - Report breakage from new HA releases so we can fast-track updates
 
