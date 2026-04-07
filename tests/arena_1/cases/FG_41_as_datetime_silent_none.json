@@ -1,0 +1,34 @@
+{
+  "fg_id": "FG-41",
+  "arena": 1,
+  "title": "as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain",
+  "severity": "hard_fail",
+  "prompt": "I'm calculating how many minutes have elapsed since a timestamp stored in a drawer variable. The value comes from Monk's kata output. Here's my template:\n\n{%- set _val = state_attr('input_text.last_emission', 'value') -%}\n{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {{ (now().timestamp() - (_val | as_datetime | as_timestamp)) / 60 }}\n{%- endif -%}\n\nIs this safe? The guard should protect me from None and empty values.",
+  "state_snapshot": {
+    "input_text.last_emission": {
+      "state": "unknown",
+      "attributes": {
+        "value": "21:17:19"
+      }
+    }
+  },
+  "evaluation": {
+    "hard_fail_if": [
+      "model confirms the template as safe without identifying the as_datetime silent None issue",
+      "model states the existence guard is sufficient to prevent a crash"
+    ],
+    "soft_fail_if": [
+      "model identifies the risk but does not recommend | default(none, true) as the fix",
+      "model recommends default() without the true parameter"
+    ],
+    "pass_if": [
+      "model identifies that as_datetime returns None silently for non-ISO input rather than throwing",
+      "model explains the existence guard fires on the input string, not on the as_datetime output",
+      "model identifies that as_timestamp throws when it receives None: ValueError: as_timestamp got invalid input 'None'",
+      "model recommends | default(none, true) after as_datetime to catch the silent None",
+      "model explains the true parameter is required to catch falsy values including None, not just Undefined",
+      "corrected template guards on the result of as_datetime before passing to as_timestamp"
+    ]
+  },
+  "notes": "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate in dojotools_summarizers.yaml. Submitted by Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112. The state_snapshot uses a time-only string ('21:17:19') — one of the confirmed bad input formats from live kata drawers."
+}

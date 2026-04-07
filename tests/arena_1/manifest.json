@@ -4,6 +4,7 @@
   "gate": false,
   "cases": [
     "cases/FG33_repr_rendering_trap.json",
-    "cases/FG34_variables_auto_deserialize.json"
+    "cases/FG34_variables_auto_deserialize.json",
+    "cases/FG_41_as_datetime_silent_none.json"
   ]
 }

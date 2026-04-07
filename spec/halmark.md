@@ -1,10 +1,10 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.14-draft
+**Version:** 0.9.15-draft
 **Status:** Community RFC
-**Last Updated:** 2026-03-21
-**HA Version Tested Against:** 2026.3.0
-**Source of Truth:** https://www.home-assistant.io/docs/configuration/templating/
+**Last Updated:** 2026-04-07
+**HA Version Tested Against:** 2026.4.1
+**Source of Truth:** https://www.home-assistant.io/docs/templating/
 
 **Spec Lead:** Nathan Curtis
 **Technical Reviewer:** Caitlin (Anthropic, Sonnet 4.6)
@@ -72,6 +72,8 @@ The community is the authority.
 If a function, filter, or pattern is not present in official Home Assistant documentation, assume it does not exist in HA's template sandbox.
 
 When documentation and model memory conflict, documentation wins.
+
+As of HA 2026.4, the templating documentation was fully restructured by Frenck. The monolithic page at `/docs/configuration/templating/` is replaced by a new structure at `/docs/templating/` with 200+ individual reference pages for every template function, filter, and test, plus 14 learning guides. These individual pages are now the authoritative ground truth for function signatures, behavior, and edge cases. The old URL redirects but the new structure is canonical.
 
 ## Models Are Always Behind
 
@@ -1585,7 +1587,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Full list of functions unavailable in trigger_variables context: states(), state_attr(), expand(), distance(), closest(), device_attr(), now(), utcnow(), today_at(), time_since(), time_until(), relative_time(), config_entry_attr(), state_translated().",
     "trigger_variables values ARE accessible inside the trigger's value_template: as {{ trigger.variables.name }}.",
     "Failure mode is context-dependent: some undefined calls return empty string, others raise at startup. Neither produces a clear HA configuration check error.",
-    "Authoritative reference: https://www.home-assistant.io/docs/configuration/templating/ — 'Limited Template Contexts' section.",
+    "Authoritative reference: https://www.home-assistant.io/docs/templating/ — 'Limited Template Contexts' section.",
     "trigger_variables is evaluated before the automation execution context exists. Only static values or trigger metadata should be used."
   ]
 }
@@ -1704,7 +1706,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Applies to all MQTT discovery entity types: binary_sensor, sensor, light, switch, climate, etc.",
     "Failure is silent: entity appears in the UI with initial state but never transitions on incoming messages.",
     "Common payload mismatches: true/false vs 1/0, ON/OFF vs on/off, quoted vs bare YAML booleans.",
-    "AI agents generating MQTT discovery config must verify the device payload format before declaring payload_on/payload_off, or use value_template as a normalization layer."
+    "AI agents generating MQTT discovery config must verify the device payload format before declaring payload_on/payload_off, or use value_template as a normalization layer.",
+    "Breaking change (HA 2026.4): the object_id option was removed after 6 months of deprecation. Any MQTT discovery config using object_id: will fail on load in 2026.4+. Remove the field entirely — HA derives object identity from the discovery topic."
   ]
 }
 ```
@@ -2345,6 +2348,59 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Key distinction — this validity by location: state: (config load, entity absent) = unsafe; attributes: (trigger time, entity live) = safe; value_template: in conditions (trigger time) = safe.",
     "Production-confirmed on HA 2026.3.0. Multiple template sensors went unavailable on restart; reverted and root cause confirmed.",
     "Submitted by: Nyx / Cayt (ZenOS session) — production-confirmed on HA 2026.3.0 (ZenOS-AI install)."
+  ]
+}
+```
+
+---
+
+## FG-41 — as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain
+
+```json
+{
+  "id": "FG-41",
+  "title": "as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.15-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "as_datetime chained to as_timestamp or any further filter without | default(none, true) interposed; input passes existence guards (is not none, trim != '', != 'None') but is not ISO 8601 parseable",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {{ (now().timestamp() - (_val | as_datetime | as_timestamp)) / 60 }}\n{%- endif -%}",
+      "reason": "as_datetime returns None silently for non-ISO input — it does not throw. The existence guard fires on the input string, not on the output of as_datetime. as_timestamp then receives None and throws: ValueError: Template error: as_timestamp got invalid input 'None'."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {%- set _parsed = _val | as_datetime | default(none, true) -%}\n  {%- if _parsed is not none -%}\n    {{ (now().timestamp() - (_parsed | as_timestamp)) / 60 }}\n  {%- else -%}\n    {{ fallback_value }}\n  {%- endif -%}\n{%- endif -%}",
+      "reason": "| default(none, true) after as_datetime catches the silent None before it reaches any downstream filter. The true parameter is required — without it, default() only catches Undefined, not None. Guard on _parsed before as_timestamp."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "as_datetime chained directly to as_timestamp (or any further filter) without | default(none, true) interposed",
+    "existence check (is not none, trim != '') applied to the input string rather than to the result of as_datetime"
+  ],
+  "edge_notes": [
+    "as_datetime returns None for any input it cannot parse — including time-only strings ('21:17:19'), Unix timestamp float strings ('1775505678.824051'), and any non-ISO 8601 format. It does not throw, log, or warn.",
+    "The failure is silent at parse time and passes HA config check. It only surfaces at runtime when a bad value flows through the template.",
+    "| default(none, true) vs | default(none): the true parameter enables boolean=True behavior — catches falsy values including None. Without it, default() only catches Undefined.",
+    "The canonical rule: after as_datetime, always | default(none, true) before any further filter chain. Never assume a non-empty input string produces a non-None datetime.",
+    "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112."
   ]
 }
 ```
