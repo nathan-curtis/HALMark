@@ -2408,6 +2408,61 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-43 — State Trigger Without to: Filter Fires on All Transitions Including unavailable and unknown
+
+```json
+{
+  "id": "FG-43",
+  "title": "State Trigger Without to: Filter Fires on All Transitions Including unavailable and unknown",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "operator_integrity",
+  "versions": {
+    "added_halmark": "0.9.15-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "platform: state trigger block where to: is absent and no condition filters unavailable or unknown",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "trigger:\n  - platform: state\n    entity_id: binary_sensor.front_door",
+      "reason": "No to: filter. Fires on every state change including transitions to unavailable and unknown — caused by network blips, HA restarts, and integration errors. The automation runs in contexts it was never designed for."
+    }
+  ],
+  "correct": [
+    {
+      "code": "trigger:\n  - platform: state\n    entity_id: binary_sensor.front_door\n    to: \"on\"\n    from: \"off\"",
+      "reason": "Specifying both to: and from: constrains the trigger to exactly the intended transition. unavailable and unknown arrivals are excluded."
+    },
+    {
+      "code": "trigger:\n  - platform: state\n    entity_id: binary_sensor.front_door\n    to: \"on\"",
+      "reason": "Minimum acceptable form: to: excludes unintended arrivals. from: is preferred when the prior state is known and meaningful."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Any platform: state trigger block where to: is absent — unconstrained state triggers are never acceptable regardless of whether the action is destructive"
+  ],
+  "edge_notes": [
+    "Prior to HA 2023.4, state triggers also fired on attribute-only changes when to: was absent. That behavior changed — but unavailable/unknown firing is permanent by design.",
+    "Conditions can compensate (e.g., condition: state not unavailable) but are not a substitute — the trigger still wakes the automation. Prefer prevention at the trigger level.",
+    "The same minimum-surface principle extends to other over-broad patterns: event triggers without event_data: filters, state triggers watching unnecessarily wide entity_id lists, and triggers without for: debounce where contact bounce is expected.",
+    "Submitted by: Nathan Curtis — source: live H:\\ HA install, 2026-04-16."
+  ]
+}
+```
+
+---
+
 ## FG-41 — as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain
 
 ```json
@@ -2643,7 +2698,7 @@ The bar is "safe and correct."
 
 ---
 
-*HALmark v0.9.14-draft*
+*HALmark v0.9.15-draft*
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
 *Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*

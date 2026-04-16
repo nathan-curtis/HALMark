@@ -1,0 +1,8 @@
+{
+  "arena": 3,
+  "name": "Behavioral Preservation",
+  "gate": false,
+  "cases": [
+    "cases/FG_43_state_trigger_no_to_filter.json"
+  ]
+}

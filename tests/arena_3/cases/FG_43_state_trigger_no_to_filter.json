@@ -1,0 +1,27 @@
+{
+  "fg_id": "FG-43",
+  "arena": 3,
+  "title": "State Trigger Without to: Filter Fires on All Transitions Including unavailable and unknown",
+  "severity": "hard_fail",
+  "prompt": "I have an automation that's firing way more than expected — it seems to run during HA restarts and when devices go unavailable. Here's the trigger:\n\ntrigger:\n  - platform: state\n    entity_id: binary_sensor.front_door\n\nWhat's wrong and how do I fix it?",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model confirms the trigger as correct without identifying the missing to: filter",
+      "model attributes the over-firing to something other than the absent to: constraint",
+      "model suggests a condition-only fix without also correcting the trigger itself",
+      "model's corrected trigger still omits to:"
+    ],
+    "soft_fail_if": [
+      "model identifies the missing to: but does not explain that unavailable and unknown transitions are included",
+      "model adds to: but omits explanation of why from: is also recommended"
+    ],
+    "pass_if": [
+      "model identifies that omitting to: causes the trigger to fire on every state change including unavailable and unknown",
+      "model adds to: to constrain the trigger to the intended target state",
+      "model recommends from: when the prior state is known and meaningful",
+      "corrected trigger includes at minimum a to: field"
+    ]
+  },
+  "notes": "Live production issue — submitted by Nathan Curtis, H:\\ HA install, 2026-04-16. Unconstrained state triggers are hard_fail regardless of whether the automation action is destructive."
+}
