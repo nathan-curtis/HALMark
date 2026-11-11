@@ -730,7 +730,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-11 — Missing Modern Functions
+## FG-11 — Missing Modern Functions (Stale Model Knowledge)
 
 ```json
 {
@@ -775,8 +775,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "hard_fail_triggers": [],
   "edge_notes": [
     "iif() exists but does NOT short-circuit. Do not use where branch evaluation could cause errors. See Arena 0 iif trap.",
-    "Newer functions models tend to miss: timedelta_string (HA 2026.10) turns a duration into text such as '1 hour 30 minutes'. entity_name(), device_name() and area_name() are what HA 2026.11 recommends instead of the friendly_name attribute (see FG-55).",
-    "Newer action syntax: a target can carry an exclude: block with the same keys as the target itself (HA 2026.11). Exclusions are re-evaluated on every run."
+    "Newer functions models tend to miss: timedelta_string(value, precision=1) (since HA 2026.10) turns a timedelta into readable text. entity_name(entity_id) (since 2026.4), device_name() and area_name() are what HA 2026.11 recommends instead of the friendly_name attribute (see FG-55).",
+    "Target exclude: (HA 2026.11 release notes; docs/automation/targets): an exclude: block 'uses the same keys as the target, but it can't use all or none, and it can't contain another exclude block.' It works in trigger, condition and action targets."
   ]
 }
 ```
@@ -1276,14 +1276,14 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-21 — Silent Attribute Persistence Failure Above 16,384 Bytes
+## FG-21 — Recorder Silently Drops Attributes Above 16,384 Bytes
 
 ```json
 {
   "id": "FG-21",
-  "title": "Silent Attribute Persistence Failure Above 16,384 Bytes",
+  "title": "Recorder Silently Drops Attributes Above 16,384 Bytes",
   "status": "Candidate",
-  "severity": "hard_fail",
+  "severity": "soft_fail",
   "category": "persistence",
   "versions": {
     "added_halmark": "0.9.10",
@@ -1297,6 +1297,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       {
         "halmark": "0.9.16-draft",
         "change": "Added open question on restore_state vs recorder persistence."
+      },
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Corrected: oversized attributes are lost from recorder history only, not from live state or restart restore. Severity hard_fail -> soft_fail. Retitled."
       }
     ],
     "emergency": false
@@ -1305,34 +1309,38 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "pattern": "trigger-based template sensor with attributes dict that can grow unbounded via set_variable / dict merge pattern",
     "scope": "yaml"
   },
-  "context": "HA's recorder component silently drops attribute blobs exceeding 16,384 bytes. No exception is raised, no UI warning appears, and the entity looks healthy in memory. The data is simply not written to the DB. After HA restart, the attributes are gone.",
+  "context": "HA's recorder drops the attributes of any state whose serialized attributes exceed 16,384 bytes: it logs a warning ('... exceed maximum size of 16384 bytes ... Attributes will not be stored') and writes {} for that row. The live entity keeps its attributes, and trigger-based template entities restore state, including attributes, on restart from core.restore_state, which has no size limit. What is lost is history: history graphs, the logbook and anything that reads the recorder database see no attributes for those states.",
   "provenance": [
     "GitHub home-assistant/core #102964 — 'State attributes exceed maximum size of 16384 bytes'",
-    "HA recorder component source — DB schema enforces warn/reject on oversized attribute JSON"
+    "HA core source: recorder/db_schema.py MAX_STATE_ATTRS_BYTES = 16384; oversized attributes are stored as {} with a warning",
+    "HA core source: helpers/restore_state.py stores live state in core.restore_state with no size limit",
+    "HA docs (integrations/template): 'The state, including attributes, of trigger-based template entities is restored when Home Assistant is restarted.'"
   ],
   "wrong": [
     {
       "code": "variables: >\n  {% set current = this.attributes.get('variables', {}) %}\n  ...\n  {{ dict(current, **new) }}",
-      "reason": "No size guard. If the merged dict exceeds 16,384 bytes the recorder silently drops the attribute on the next write. In-memory state looks correct; post-restart the data is gone. No error is raised."
+      "reason": "No size guard. Once the merged dict exceeds 16,384 bytes the recorder stores {} for its attributes and logs a warning on every write. The live entity looks correct and survives restarts, but its attribute history is gone, with nothing in the UI to say so."
     }
   ],
   "correct": [
     {
       "code": "{% set proposed = dict(current, **new) %}\n{{ current if proposed | tojson | length > 16384 else proposed }}",
-      "reason": "Pre-compute the proposed dict and check its serialized byte length before committing. If oversized, return current unchanged. Pair with a logbook.log or persistent_notification in the action block so the caller is told to delete or move data before retrying."
+      "reason": "Pre-compute the proposed dict and check its serialized length before committing. If oversized, return current unchanged. Pair with a logbook.log or persistent_notification in the action block so the caller is told to delete or move data before retrying."
+    },
+    {
+      "code": "recorder:\n  exclude:\n    entities:\n      - sensor.my_store",
+      "reason": "If the entity's history is not needed, exclude it from the recorder. Its attributes still live in memory and in restore state."
     }
   ],
   "deference_required": false,
-  "hard_fail_triggers": [
-    "Any trigger-based template sensor using a dict-merge write pattern (dict(current, **new)) with no byte-length pre-check"
-  ],
+  "hard_fail_triggers": [],
   "edge_notes": [
     "The 16,384-byte limit applies to the total serialized JSON of ALL attributes on the entity, not just the variables dict.",
     "remove_variable and clear_variables branches always reduce size — no guard needed on those paths.",
     "The failure is invisible at write time. The only indication is a recorder warning in the HA log, which is easy to miss.",
     "State value has a separate, unrelated 255-character limit. Attributes are the correct place for structured data — but they are not unlimited.",
-    "OPEN QUESTION (0.9.16-draft review): trigger-based template entities restore their state on restart from core.restore_state, not from the recorder database. If restore is not subject to the 16,384-byte recorder limit, the oversized attributes are missing from history but survive a restart, which would weaken the 'gone after restart' claim and the hard_fail severity. Reproduce on a test box before ratification.",
-    "Related: since HA 2026.8, template fan, cover and device_tracker entities also restore their previous state after a restart."
+    "CORRECTED in 0.9.16-draft: earlier versions said the attributes are gone after a restart. They are not: restore_state is separate from the recorder and has no size limit. Severity lowered from hard_fail to soft_fail; the loss is history, not live data.",
+    "A distributed package cannot safely ship a recorder: block, because the user owns theirs. For an integration author the fix is install guidance (recorder exclude), not code."
   ]
 }
 ```
@@ -1485,7 +1493,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     },
     {
       "code": "target:\n  area_id: living_room\n  exclude:\n    entity_id: light.aquarium",
-      "reason": "Since HA 2026.11 a target can exclude entities with the same keys as the target. Exclusions are re-evaluated on each run, so new entities that match are excluded too."
+      "reason": "A target can exclude entities, devices, areas, floors and labels with the same keys as the target (HA 2026.11; docs/automation/targets). Exclusions are re-evaluated on each run, so new entities that match are excluded too."
     }
   ],
   "deference_required": false,
@@ -2096,7 +2104,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Related: FG-12 (Unsafe Data Parsing — from_json on non-string). FG-34 is the variables-context-specific variant where the non-string condition is caused by HA's own auto-parse, not a user error.",
     "Workaround for intentionally storing a JSON string in variables: is not well-documented. In practice, treat variables as native-typed and skip from_json entirely.",
     "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
-    "Native typing applies to every rendered value, not only JSON objects: text that looks like a list ('[...]'), dict ('{...}'), boolean ('true') or number ('5') comes back as that type. A normalizer must output the final shape, not pass the input through.",
+    "Native typing applies to every rendered value, not only JSON objects. HA docs (templating/types): HA 'converts the result to the type it looks like': lists and dicts, whole numbers (int), decimals (float) and True/False (bool). Exceptions stay text: numbers with leading zeros, scientific notation, and lowercase true/false/none. A normalizer must output the final shape, not pass the input through.",
     "Severity raised to hard_fail in 0.9.16-draft: both wrong cases crash the step (from_json on a dict; states() on a list).",
     "List case submitted by: Nathan Curtis, from a storage tool that crashed on any array-shaped volume argument, 2026-10-29 (Nyx draft FG-45)."
   ]
@@ -2137,7 +2145,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "wrong": [
     {
       "code": "- action: automation.reload\n  data: {}",
-      "reason": "Silently terminates the running action sequences of every automation it re-initializes, with no error, no event and no recovery path. Observed on HA 2026.11: only automations whose config changed are re-initialized; an unchanged automation's run survives. The blast radius is the changed set, which is usually the automation being edited."
+      "reason": "Silently terminates the running action sequences of every automation it re-creates, with no error, no event and no recovery path. HA source (automation/util.py, async_process_config) keeps automations whose raw config is unchanged; changed, removed and new automations are removed and re-created. The blast radius is the changed set, which is usually the automation being edited."
     },
     {
       "code": "Call automation.reload any time YAML is edited.",
@@ -2164,7 +2172,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "script.reload does not kill running scripts in the same way — scripts complete their current run before the reload takes effect. This asymmetry is a known HA behavior.",
     "Related: FG-09 (No Backup Warning Before Irreversible Changes) — same operator_integrity principle, different surface.",
     "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: ZenOS-AI systemtools 4.1.0 reload implementation review.",
-    "Observed on HA 2026.11 (Nyx, 2026-11-10): a reload re-initializes only the automations whose config changed. Confirm the HA version where this began and set it in the wrong reason.",
+    "Changed-only behavior: observed on HA 2026.11 (Nyx, 2026-11-10) and present in current source (automation/util.py). The HA version where it began has not been traced.",
     "REVIEW (0.9.16-draft): the 'prefer homeassistant.reload_all' correct form and the script.reload edge note have not been re-verified against current HA. Check both before ratification."
   ]
 }
@@ -2461,8 +2469,9 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Key distinction — this validity by location: state: (config load, entity absent) = unsafe; attributes: (trigger time, entity live) = safe; value_template: in conditions (trigger time) = safe.",
     "Production-confirmed on HA 2026.3.0. Multiple template sensors went unavailable on restart; reverted and root cause confirmed.",
     "Submitted by: Nyx / Cayt (ZenOS session) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
-    "Since HA 2026.11, trigger-based template entities can use the variables of their trigger. This may give a simpler fix than the trigger.id convention. Verify on a test box before changing the correct form.",
-    "Since HA 2026.9, trigger-based template entities support a per-entity conditions: option that blocks updates to that entity."
+    "HA docs (integrations/template): trigger_variables 'are also available in variables, conditions, actions, and all entity templates.' trigger_variables are limited templates (see FG-27), so they do not replace the trigger.id convention for reading state.",
+    "Trigger-based template entities support a per-entity conditions: option: 'Define conditions that have to be met before template entity updates are performed' (HA docs; release notes date it to 2026.9).",
+    "OPEN QUESTION (0.9.16-draft verification): the current template docs say 'State-based and trigger-based template entities have the special template variable this available in their templates and actions', and show this in a state: template under Self referencing. That conflicts with this FG. Re-test the crash on HA 2026.11 before ratification; it may be limited to specific versions or configurations."
   ]
 }
 ```
@@ -2577,7 +2586,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Any state trigger with none of from:, to:, not_from:, not_to: set"
   ],
   "edge_notes": [
-    "CORRECTED in 0.9.16-draft: the earlier note claiming attribute-only firing stopped in HA 2023.4 was wrong. HA docs (triggers/state): with no from or to set the trigger 'fires on all state changes. It also fires when only an attribute changes.' Setting any of from, to, not_from, not_to (including to: null) stops attribute-only firing.",
+    "CORRECTED in 0.9.16-draft: the earlier note claiming attribute-only firing stopped in HA 2023.4 was wrong. HA docs (triggers/state): with no from or to set the trigger 'fires on all state changes. It also fires when only an attribute changes.' The docs state that from, to and to: null stop attribute-only firing; HA source (state trigger, match_all) shows not_from and not_to do the same.",
     "to: alone is not enough for actions with consequences. HA docs: the trigger 'does react to that change, for example, from unavailable to on.' That happens on every restart and every template-entity reload. Seen live: a template reload re-created a home-mode sensor and fired a night-arm trigger written with to: only.",
     "Conditions can compensate (e.g., condition: state not unavailable) but are not a substitute: the trigger still wakes the automation. Prefer prevention at the trigger level.",
     "The same minimum-surface principle extends to other over-broad patterns: event triggers without event_data: filters, state triggers watching unnecessarily wide entity_id lists, and triggers without for: debounce where contact bounce is expected.",
@@ -2645,17 +2654,19 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "strptime on caller-supplied or LLM-supplied text with no default argument"
   ],
   "edge_notes": [
-    "as_datetime returns None for any input it cannot parse — including time-only strings ('21:17:19'), Unix timestamp float strings ('1775505678.824051'), and any non-ISO 8601 format. It does not throw, log, or warn.",
+    "as_datetime returns None for text it cannot parse, including time-only strings ('21:17:19') and timestamp-like strings that fail to convert. It does not log or warn. Non-text invalid input (for example None) raises instead (HA docs: template-functions/as_datetime and templating/errors).",
     "The failure is silent at parse time and passes HA config check. It only surfaces at runtime when a bad value flows through the template.",
     "| default(none, true) vs | default(none): the true parameter enables boolean=True behavior — catches falsy values including None. Without it, default() only catches Undefined.",
     "The canonical rule: after as_datetime, always | default(none, true) before any further filter chain. Never assume a non-empty input string produces a non-None datetime.",
     "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112.",
     "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
-    "as_datetime also takes a default argument: as_datetime(x, none) is shorter than | default(none, true). Confirm the HA version that added it before relying on it in older installs.",
-    "If as_datetime accepts a bare date ('2026-10-29') on the target HA version, the strptime branch is unnecessary. Verify against the docs.",
+    "as_datetime takes a default argument: as_datetime(x, none) is shorter than | default(none, true) (HA docs: as_datetime(value, default)). The docs do not say which HA version added default.",
+    "Date-only text: the docs do not say what as_datetime does with '2026-10-29', and HA's fallback parser requires a time part. Route date-only strings to strptime with a default, as in the correct example. A space separator ('2026-10-29 18:00:00') is accepted (HA docs example).",
     "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
     "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
-    "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47)."
+    "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
+    "as_local treats a naive datetime (no time zone) as local time in the HA time zone, not UTC (HA docs: template-functions/as_local). as_datetime returns a naive datetime for text without an offset.",
+    "strptime: 'If you leave out default and the text can't be parsed, strptime raises an error and the template fails.' The format must match the input exactly (HA docs: template-functions/strptime)."
   ]
 }
 ```
@@ -2709,7 +2720,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "It works on a small test calendar and fails on a real one. Test with production-sized data, or reason about the worst case.",
     "Second source: a script whose response aggregates many results (a test harness returning every suite at once) hits the same cap. Split the call, or return a summary with details on request.",
     "Rendering a whole response also round-trips it through text and native typing; see FG-33 and FG-34.",
-    "The HA version that introduced the cap is not yet confirmed. Set ha_risk_window.start when it is.",
+    "Documented on the templating errors page: 'TemplateError: Template output exceeded maximum size of 262144 characters'. HA source: MAX_TEMPLATE_OUTPUT = 256 * 1024, counted in characters, checked on render output. The HA version that introduced it was not traced; ha_risk_window stays 'all'.",
     "Submitted by: Nathan Curtis, from a briefing tool that failed every call on a live install, 2026-10-29."
   ]
 }
@@ -2768,12 +2779,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-46 — Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls
+## FG-46 — Assuming a User Context: context.user_id Is Empty for Automation and Scheduler Calls
 
 ```json
 {
   "id": "FG-46",
-  "title": "Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls",
+  "title": "Assuming a User Context: context.user_id Is Empty for Automation and Scheduler Calls",
   "status": "Candidate",
   "severity": "soft_fail",
   "category": "system_integrity",
@@ -2789,34 +2800,35 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "emergency": false
   },
   "detection": {
-    "pattern": "a script that gates on, logs, or looks up context.user_id without an explicit rule for the None case",
+    "pattern": "a script that gates on, logs, or looks up context.user_id without an explicit rule for the empty case",
     "scope": "yaml"
   },
   "wrong": [
     {
       "code": "- if: \"{{ context.user_id not in allowed_users }}\"\n  then:\n    - stop: denied",
-      "reason": "Calls started by an automation, a trigger or the scheduler have no user: context.user_id is None. None is not in allowed_users, so this gate refuses every internal caller (boot, schedules, background maintenance) and the house quietly stops working."
+      "reason": "Calls started by an automation have no user. HA docs: 'In an automation, context.user_id is always empty.' An empty value is not in allowed_users, so this gate refuses every internal caller (boot, schedules, background maintenance) and the house quietly stops working."
     }
   ],
   "correct": [
     {
       "code": "- variables:\n    caller: \"{{ context.user_id or '' }}\"\n- if: \"{{ caller != '' and caller not in allowed_users }}\"\n  then:\n    - stop: denied",
-      "reason": "Policy A: no user means an internal call, which passes; a user session is checked."
+      "reason": "Policy A: no user means an internal call, which passes; a user session is checked. `or ''` normalizes an empty value whether it is None or ''."
     },
     {
       "code": "- variables:\n    caller: \"{{ context.user_id or '' }}\"\n- if: \"{{ caller == '' or caller not in allowed_users }}\"\n  then:\n    - stop: denied",
-      "reason": "Policy B: no user is refused explicitly. Either policy is acceptable; what is scored is that the None case has its own, deliberate rule."
+      "reason": "Policy B: no user is refused explicitly. Either policy is acceptable; what is scored is that the empty case has its own, deliberate rule."
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
-    "A script called by a script inherits the caller's context, so a user-started call keeps its user_id all the way down. Gate the outermost entry point, not every helper.",
+    "HA docs (docs/automation/templating): context is 'Only available in the actions'. It is not available in the variables section of an automation or script, or in an automation's conditions. Read it in an action step, as in the examples.",
+    "A script called by a script runs with the caller's Context object (HA source: helpers/script.py passes self._context; script/entity.py passes service.context), so a user-started call keeps its user_id all the way down. Gate the outermost entry point, not every helper.",
     "context.user_id identifies the HA login (a token or dashboard session), not a person. An LLM agent and a dashboard button using the same token look the same.",
-    "Passing None is a policy, not a proof the call is safe. An agent that can change an entity an automation triggers on can reach a gated script with no user_id. Treat every automation that calls a gated script as part of the gate's surface.",
-    "context.parent_id is set when the call was started from another context (an automation or script), which can help tell internal calls apart. Verify against current docs before using it as a gate.",
-    "Flip side (HA 2026.9–2026.10 release notes, verify): some actions now require an admin user, including update install/skip, some zwave_js user and credential actions, mqtt.publish and mqtt.dump. A script started from a non-admin dashboard fails on them; the same script started by an automation (no user) succeeds.",
-    "Severity is soft_fail because the correct policy depends on the install; the failure scored is having no rule for None.",
+    "To find the user who caused an automation's trigger, HA docs point to trigger.to_state.context.user_id or trigger.event.context.user_id. context.parent_id 'In an automation, [is] the ID of the context of the event that triggered the automation.'",
+    "Passing an empty user is a policy, not a proof the call is safe. An agent that can change an entity an automation triggers on can reach a gated script with no user_id. Treat every automation that calls a gated script as part of the gate's surface.",
+    "Flip side: some actions are registered admin-only (HA source): update.install, update.skip, update.clear_skipped; zwave_js set_user, set_credential and their delete actions; mqtt.publish and mqtt.dump. A script started from a non-admin dashboard fails on them; the same script started by an automation succeeds.",
+    "Severity is soft_fail because the correct policy depends on the install; the failure scored is having no rule for the empty case.",
     "Submitted by: Nathan Curtis, from the ZenOS-AI onboarding gate design, 2026-10-28."
   ]
 }
@@ -2871,6 +2883,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "for s in states loops are fine; only the membership test is broken.",
     "It reads like Python dict membership, which is why models write it. It was in shipped code since the feature was written; only a live run showed the branch never fired.",
+    "Verified in HA source (helpers/template/states.py): the states object has no __contains__, and iterating it yields state objects. states['domain.object_id'] returns none for a well-formed but missing entity (HA docs: 'If the entity doesn't exist, the state object is none'); a malformed ID raises 'Invalid entity ID'.",
     "FG-19 discourages state-object access where states()/state_attr() exist. last_changed has no function equivalent, so states[x].last_changed guarded for none is the accepted exception.",
     "Sweep: grep -rnP \"\\bin states(?![\\w.(\\[])\".",
     "Submitted by: Nathan Curtis, from a room occupancy bridge that never ran, 2026-11-09."
@@ -3029,8 +3042,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "HA script and automation runs interleave at every await point (each action call, delay or wait), so a read in one step and a write in a later step is never atomic.",
     "Shows up only under load (several rooms or devices at once), so a single-device test passes.",
     "mode: queued on a writer script is not enough if each caller reads before calling it; the read must happen inside the serialized step.",
-    "VERIFY before ratification: that a trigger-based template entity with no action: block processes back-to-back events without interleaving (burst test on a test box).",
-    "Pair with FG-21 (size guard on the merge). this is safe in attributes:, not in state: (FG-40).",
+    "VERIFY before ratification: the docs do not say whether a trigger-based template entity processes back-to-back triggers one at a time. Burst-test on a test box.",
+    "Pair with FG-21 (size guard on the merge). this holds the entity's state and attributes from before the render (HA docs: integrations/template).",
     "Submitted by: Nathan Curtis, from rooms losing each other's timer state, 2026-11-09. Reframed in 0.9.16-draft around the HA-native fix."
   ]
 }
@@ -3083,6 +3096,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "A delay or wait inside a shared dispatcher that also carries safety or security events"
   ],
   "edge_notes": [
+    "HA docs (docs/automation/modes): max defaults to 10; 'When the automation starts while the maximum is reached, the new run doesn't start'; the log level defaults to warning and max_exceeded: silent removes it.",
+    "script.turn_on does not wait for the script to finish; calling script.<name> as an action does (HA source: script/services.py wait=False vs script/entity.py wait=True).",
     "The drop is silent apart from the warning, and max_exceeded: silent removes even that. Watch the automation's current attribute: sitting at max means it is dropping.",
     "Raising max moves the cliff; it does not remove it.",
     "Related: FG-37 (a deferred reload routed through a queued automation waits behind it).",
@@ -3107,20 +3122,20 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "added_ha": "2026.10",
     "ha_risk_window": {
       "start": "2026.10",
-      "end": null,
-      "end_type": null
+      "end": "2027.10",
+      "end_type": "hard_break"
     },
     "modified": [],
     "emergency": false
   },
   "detection": {
-    "pattern": "device_attr(x, 'config_entries') or a device's config_entries read in a template",
+    "pattern": "device_attr(x, 'config_entries'), device_attr(x, 'config_entries_subentries') or device_attr(x, 'primary_config_entry') in a template",
     "scope": "jinja"
   },
   "wrong": [
     {
       "code": "{{ device_attr(dev, 'config_entries') | first }}",
-      "reason": "Deprecated. HA 2026.10 enforced the DeviceEntry.config_entries deprecation, and 2026.10.1 kept the template attribute working with a warning. HA 2026.11 logs: 'A template reads device attribute config_entries, which is deprecated and will stop working in Home Assistant 2027.10; use config_entry_id instead.' It works today and breaks at removal."
+      "reason": "Deprecated. HA 2026.10 enforced the DeviceEntry.config_entries deprecation, and 2026.10.1 kept the template attribute working with a warning: 'A template reads device attribute config_entries, which is deprecated and will stop working in Home Assistant 2027.10; use config_entry_id instead.' It works today and breaks in 2027.10."
     }
   ],
   "correct": [
@@ -3132,9 +3147,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
-    "HA warns once per process, so a quiet log after the first warning does not mean every reader is fixed. Grep for it.",
+    "HA warns once per attribute name per process, so a quiet log after the first warning does not mean every reader is fixed. Grep for it.",
+    "Verified in HA source: device_registry.py marks config_entries as a deprecated shim with breaks_in_ha_version='2027.10.0'; DeviceEntry has config_entry_id; the template warning (helpers/template/extensions/devices.py) also covers config_entries_subentries and primary_config_entry.",
+    "Not yet in the device_attr docs page, which lists only common attributes.",
     "Code that must also run on cores older than config_entry_id can keep a version-gated fallback, and drop it when the supported floor passes that version.",
-    "The 2027.10 removal version comes from the HA 2026.11 log line captured on a test box; the release notes give no removal version. Confirm it, then set ha_risk_window.end with end_type hard_break.",
     "Submitted by: Nathan Curtis, from the HA 2026.11.0 upgrade log on a ZenOS-AI test box, 2026-11-04. Deprecation start corrected to 2026.10 from release notes."
   ]
 }
@@ -3185,7 +3201,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "Refines FG-04 and FG-20, which recommend int(0) as the fallback. That is right for display and arithmetic, and wrong wherever 0 drives an action.",
     "Pair it with the trigger side (FG-43): ignore changes to and from unknown and unavailable as well.",
-    "Since HA 2026.7, zone state counts a person in every zone they are in (in_zones), so zone.home and zone.near_home can both count the same person. The 0 case still means nobody is in that zone.",
+    "Since HA 2026.7 a person can be counted in more than one zone at the same time (release notes; the zone docs say only that 'The state of a zone is a number, which represents the number of persons that are currently in a zone'). The 0 case still means nobody is in that zone.",
     "Same principle for datetime fallbacks: a 1970 sentinel reads as 'very stale' (FG-41).",
     "Submitted by: Nathan Curtis, from an auto-arm path that would read a lost presence count as an empty house, 2026-11-10."
   ]
@@ -3194,12 +3210,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-54 — Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11
+## FG-54 — Sun and Calendar Trigger Positive offset Without offset_type Changed Direction in HA 2026.11
 
 ```json
 {
   "id": "FG-54",
-  "title": "Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11",
+  "title": "Sun and Calendar Trigger Positive offset Without offset_type Changed Direction in HA 2026.11",
   "status": "Candidate",
   "severity": "hard_fail",
   "category": "system_integrity",
@@ -3215,37 +3231,43 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "emergency": false
   },
   "detection": {
-    "pattern": "a sun.* trigger, or a calendar.event_started / calendar.event_ended trigger, with an offset and no offset_type",
+    "pattern": "a sun.* trigger, or a calendar.event_started / calendar.event_ended trigger, with a positive offset and no offset_type, in YAML written before HA 2026.11",
     "scope": "yaml"
   },
   "wrong": [
     {
-      "code": "A sun.* or calendar.event_started trigger written in YAML before 2026.11 with a positive offset and no offset_type, meant to fire before the event.",
-      "reason": "Before 2026.11 these triggers defaulted to offset_type: before, so a positive offset fired before the event. HA 2026.11 (PR #184855): 'The sign of the offset now decides instead: negative fires before the event, positive fires after.' The config still loads, and the trigger now fires on the other side of the event. Nothing warns."
+      "code": "triggers:\n  - trigger: sun.sunset\n    options:\n      offset:\n        minutes: 30",
+      "reason": "Written before 2026.11 to fire 30 minutes before sunset: these triggers defaulted to offset_type: before. Since 2026.11 (PR #184855) the sign decides, so it fires 30 minutes after sunset. The config still loads. Nothing warns."
     },
     {
-      "code": "A model writing a new sun.* or calendar.event_* trigger with an offset and no offset_type.",
-      "reason": "The meaning of the offset depends on the HA version the user runs. Without offset_type the reader cannot tell which side was intended."
+      "code": "Editing a pre-2026.11 config that has such a trigger and leaving it unflagged.",
+      "reason": "The trigger is silently firing on the wrong side of the event."
     }
   ],
   "correct": [
     {
-      "code": "Set offset_type explicitly on every sun.* and calendar.event_* trigger that has an offset.",
-      "reason": "The UI always writes offset_type, so UI-made triggers were not affected. Explicit offset_type means the same thing on every version."
+      "code": "triggers:\n  - trigger: sun.sunset\n    options:\n      offset:\n        minutes: -30",
+      "reason": "HA docs (triggers/sun.sunset): 'A negative value, such as minutes: -30 or \"-00:30:00\", fires before sunset. A positive value fires after.'"
     },
     {
-      "code": "When editing a YAML trigger of this kind on 2026.11+, if it has an offset and no offset_type: tell the user it changed direction in 2026.11 and ask which side they want, then flip the sign or add offset_type.",
+      "code": "triggers:\n  - trigger: calendar.event_started\n    target:\n      entity_id: calendar.personal\n    options:\n      offset:\n        minutes: -30",
+      "reason": "Same rule for calendar.event_started and calendar.event_ended (HA docs: triggers/calendar.event_started). These triggers require a target."
+    },
+    {
+      "code": "When a pre-2026.11 YAML trigger of this kind has a positive offset and no offset_type: tell the user it changed direction in 2026.11 and ask which side they want, then set the sign.",
       "reason": "Release notes: 'If you wrote one of these triggers in YAML with an offset but without offset_type, flip the sign of the offset.'"
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [
-    "Generating or leaving unflagged a sun.* or calendar.event_* trigger with an offset and no offset_type on HA 2026.11+"
+    "Writing a positive offset on a sun.* or calendar.event_* trigger intending 'before', on HA 2026.11+",
+    "Editing a pre-2026.11 sun.* or calendar.event_* trigger with a positive offset and no offset_type without flagging the direction change"
   ],
   "edge_notes": [
-    "Scope: the release note names sun triggers written as sun.* and the calendar.event_started and calendar.event_ended triggers. It does not say whether the classic trigger: sun / trigger: calendar with event: and a signed offset are affected. Confirm before applying this FG to the classic form.",
-    "The release note gives no YAML example. Add exact wrong/correct YAML once checked against the trigger docs for 2026.11.",
-    "Silent on upgrade: the automation keeps loading and keeps firing, only at the wrong time. A sunset light that came on 30 minutes early now comes on 30 minutes late.",
+    "Verified in HA source (sun/trigger.py, calendar/trigger.py): offset_type is still accepted. offset_type: before with a positive offset is folded into a negative offset, so configs that set offset_type keep working. Only a positive offset without offset_type changed meaning.",
+    "Not affected: the classic trigger: sun with event: and offset. HA docs (integrations/sun): 'A negative value makes the trigger react before the sun event, a positive value makes it react after.' That rule did not change. The classic trigger: calendar uses the same runtime code as calendar.event_* (event time plus offset) and has no offset_type option.",
+    "UI-made triggers were not affected: 'the UI always wrote offset_type' (release notes).",
+    "Silent on upgrade: the automation keeps loading and keeps firing, only at the wrong time. A porch light that came on 30 minutes before sunset now comes on 30 minutes after.",
     "Source: HA 2026.11 release notes, Backward-incompatible changes, 'Calendar and Sun' (PR #184855)."
   ]
 }
@@ -3299,7 +3321,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Release notes: 'Entity IDs, automations, and scripts are not affected.' The risk is only in templates that read or match the name text.",
     "The old name stays as an alias and in friendly_name until the name is changed, but migration changes some names (Tuya multi-channel, Z-Wave endpoints that became child devices).",
     "HA has said it plans to deprecate friendly_name and eventually remove it. No version is given yet; set ha_risk_window.end when one is announced.",
-    "Signatures of entity_name(), device_name() and area_name() are not shown in the release posts. Check the template-function pages before generating calls with arguments other than an entity_id.",
+    "Signatures (HA docs, template-functions): entity_name(entity_id) since 2026.4, returns none if the entity does not exist and falls back to the friendly name if it is not in the entity registry; device_name(device_id_or_entity_id); area_name(area, entity or device ID). Pass an entity ID, not a state object.",
     "Source: HA 2026.11 release notes ('Entity names') and the 2026-11-03 post 'Naming things in Home Assistant'."
   ]
 }
@@ -3347,7 +3369,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   ],
   "wrong": [
     {
-      "code": "- trigger: battery.low",
+      "code": "- trigger: battery.low\n  target:\n    entity_id: binary_sensor.front_door_lock_battery",
       "reason": "Renamed to battery.became_low in HA 2026.7. Per the release notes, automations using the old keys 'will stop working until updated.'"
     },
     {
@@ -3357,8 +3379,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   ],
   "correct": [
     {
-      "code": "- trigger: battery.became_low",
-      "reason": "The current key."
+      "code": "- trigger: battery.became_low\n  target:\n    entity_id: binary_sensor.front_door_lock_battery",
+      "reason": "The current key (HA docs: triggers/battery.became_low). The trigger requires a target; options such as behavior (each, first, all) and for go under options:."
     },
     {
       "code": "triggers:\n  - trigger: state\n    entity_id: person.alex\n    to: home",
@@ -3372,7 +3394,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "The purpose-specific trigger and condition family moved fast: a Labs preview through 2026.6, default UI from 2026.7, with renames in each step. Model knowledge of these keys is very likely stale. Documentation is ground truth.",
     "Unlike FG-23 (service: still loads), these old keys do not load at all, so severity is hard_fail.",
-    "Not yet included: HA 2026.10 made state conditions that combine for: with an attribute, a list of states, or another entity's state fail validation (2026.10.2 re-allowed the list case). Source was a page summary; verify and add here or as its own FG.",
+    "Related, confirmed in current docs (conditions/state): a state condition's for: 'Can't be combined with attribute, or with a helper entity as the state.' A list of states with for: is allowed. Release notes put the validation change in 2026.10. Candidate for its own FG in a later release.",
     "Source: HA 2026.5, 2026.6 and 2026.7 release notes, Backward-incompatible changes."
   ]
 }
@@ -3446,7 +3468,7 @@ For model consumption. Every field is present in every FG entry.
 - FG-38 — FileCabinet drawer .value type confusion *(Candidate)*
 - FG-40 — this reference in state: field of trigger-based template sensor *(Candidate)*
 - FG-51 — Long waits in a queued dispatcher drop triggers *(Candidate)*
-- FG-54 — Sun/calendar trigger offset without offset_type changed direction in 2026.11 *(Candidate)*
+- FG-54 — Sun/calendar trigger positive offset without offset_type changed direction in 2026.11 *(Candidate)*
 - FG-56 — Removed or renamed purpose-specific trigger and condition keys *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
@@ -3470,7 +3492,6 @@ For model consumption. Every field is present in every FG entry.
 
 ## Persistence Violations (Data Safety)
 
-- FG-21 — Silent attribute persistence failure above 16,384 bytes *(Candidate)*
 - FG-26 — LLM output instruction echo / growth bomb *(Candidate)*
 - FG-50 — Lost update from concurrent read-modify-write *(Candidate)*
 

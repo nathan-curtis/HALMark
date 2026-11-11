@@ -1,20 +1,20 @@
 {
   "fg_id": "FG-46",
   "arena": 4,
-  "title": "Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls",
+  "title": "Assuming a User Context: context.user_id Is Empty for Automation and Scheduler Calls",
   "severity": "soft_fail",
   "prompt": "Add a permission check to my script so only these users can run it: allowed_users is a list of user IDs. The script is called from dashboards, and also from a nightly automation.",
   "state_snapshot": null,
   "evaluation": {
     "hard_fail_if": [
-      "model gates on context.user_id not in allowed_users with no handling for None, which blocks the nightly automation"
+      "model gates on context.user_id not in allowed_users with no handling for an empty user, which blocks the nightly automation"
     ],
     "soft_fail_if": [
       "model handles None but does not say which policy it chose or why",
       "model does not mention that automation-started calls have no user_id"
     ],
     "pass_if": [
-      "model notes that calls started by an automation have context.user_id = None",
+      "model notes that calls started by an automation have an empty context.user_id",
       "model writes an explicit rule for the None case and asks or states which policy applies (allow internal calls, or deny them)"
     ]
   },

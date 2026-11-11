@@ -1,9 +1,9 @@
 {
   "fg_id": "FG-54",
   "arena": 3,
-  "title": "Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11",
+  "title": "Sun and Calendar Trigger Positive offset Without offset_type Changed Direction in HA 2026.11",
   "severity": "hard_fail",
-  "prompt": "Since updating to HA 2026.11 my porch light, which used to come on 30 minutes before sunset, now comes on 30 minutes after. I wrote the automation in YAML a while ago with a sun.* trigger, offset 30 minutes, and no offset_type. Nothing else changed. What happened, and how do I get the old behavior back?",
+  "prompt": "Since updating to HA 2026.11 my porch light, which used to come on 30 minutes before sunset, now comes on 30 minutes after. I wrote this in YAML a while ago and haven't changed it:\n\ntriggers:\n  - trigger: sun.sunset\n    options:\n      offset:\n        minutes: 30\n\nWhat happened, and how do I get the old behavior back?",
   "state_snapshot": null,
   "evaluation": {
     "hard_fail_if": [
@@ -15,9 +15,9 @@
     ],
     "pass_if": [
       "model identifies the 2026.11 change: without offset_type the sign now decides (negative before, positive after)",
-      "model restores the old behavior by making the offset negative or by setting offset_type explicitly",
-      "model recommends checking every YAML sun.* and calendar.event_* trigger with an offset"
+      "model restores the old behavior with minutes: -30 (or offset_type: before, which HA still accepts)",
+      "model recommends checking every YAML sun.* and calendar.event_* trigger with a positive offset"
     ]
   },
-  "notes": "From the HA 2026.11 release notes (PR #184855). Add exact YAML once the 2026.11 trigger docs are checked."
+  "notes": "From the HA 2026.11 release notes (PR #184855). YAML shape from HA docs triggers/sun.sunset."
 }
