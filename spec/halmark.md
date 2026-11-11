@@ -6,7 +6,6 @@
 **HA Version Tested Against:** 2026.11.1 (release notes reviewed 2026.5–2026.11.1)
 **Source of Truth:** https://www.home-assistant.io/docs/templating/
 
-**Spec Lead:** Nathan Curtis
 **Technical Reviewer:** Caitlin (Anthropic, Sonnet 4.6)
 **Editorial & Strategy:** Veronica (OAI, GPT5.2)
 
@@ -2107,7 +2106,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
     "Native typing applies to every rendered value, not only JSON objects. HA docs (templating/types): HA 'converts the result to the type it looks like': lists and dicts, whole numbers (int), decimals (float) and True/False (bool). Exceptions stay text: numbers with leading zeros, scientific notation, and lowercase true/false/none. A normalizer must output the final shape, not pass the input through.",
     "Severity raised to hard_fail in 0.9.16-draft: both wrong cases crash the step (from_json on a dict; states() on a list).",
-    "List case submitted by: Nathan Curtis, from a storage tool that crashed on any array-shaped volume argument, 2026-10-29 (Nyx draft FG-45).",
+    "List case source: a storage tool that crashed on any array-shaped volume argument, 2026-10-29 (Nyx draft FG-45).",
     "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): in a variables: step, 'true' stayed a string, 'True' became a boolean, '007' stayed a string, '[1,2]' became a list."
   ]
 }
@@ -2573,7 +2572,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11; the docs show only the space-separated form). Do not route by separator; use as_datetime(raw, none).",
     "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
     "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
-    "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
+    "strptime case source: a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
     "as_datetime returns a naive datetime for text without an offset, and subtracting a naive datetime from now() (which is aware) raises. Pipe through as_local first. as_local treats a naive datetime as local time in the HA time zone, not UTC (HA docs: template-functions/as_local).",
     "strptime: 'If you leave out default and the text can't be parsed, strptime raises an error and the template fails.' The format must match the input exactly (HA docs: template-functions/strptime).",
     "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None."
@@ -2696,7 +2695,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Conditions can compensate (e.g., condition: state not unavailable) but are not a substitute: the trigger still wakes the automation. Prefer prevention at the trigger level.",
     "The same minimum-surface principle extends to other over-broad patterns: event triggers without event_data: filters, state triggers watching unnecessarily wide entity_id lists, and triggers without for: debounce where contact bounce is expected.",
     "Examples use the current trigger: key. platform: still loads but is the legacy form.",
-    "Submitted by: Nathan Curtis — source: live H:\\ HA install, 2026-04-16. Correction from Nyx, 2026-11-10."
+    "Source: a live HA install, 2026-04-16. Correction from Nyx, 2026-11-10."
   ]
 }
 ```
@@ -2751,7 +2750,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Second source: a script whose response aggregates many results (a test harness returning every suite at once) hits the same cap. Split the call, or return a summary with details on request.",
     "Rendering a whole response also round-trips it through text and native typing; see FG-33 and FG-34.",
     "Documented on the templating errors page: 'TemplateError: Template output exceeded maximum size of 262144 characters'. HA source: MAX_TEMPLATE_OUTPUT = 256 * 1024, counted in characters, checked on render output. The HA version that introduced it was not traced; ha_risk_window stays 'all'.",
-    "Submitted by: Nathan Curtis, from a briefing tool that failed every call on a live install, 2026-10-29.",
+    "Source: a briefing tool that failed every call on a live install, 2026-10-29.",
     "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): 'x' * 262144 renders in a variables: step; 'x' * 262145 fails with 'Template output exceeded maximum size of 262144 characters'."
   ]
 }
@@ -2803,7 +2802,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "if blocks do not create a scope; for loops do. Models trained on Python get this wrong because Python has no loop scope.",
     "Same trap for accumulators: {% set total = total + x %} inside a loop never accumulates. Use ns.total.",
     "Scope note: this is standard Jinja2 scoping, not an HA addition. It is included because HA templates are where most production users hit it. Candidate for Arena 0 on ratification.",
-    "Submitted by: Nathan Curtis, from ZenOS-AI, where every loop accumulator uses namespace(), 2026-10-29."
+    "Source: ZenOS-AI, where every loop accumulator uses namespace(), 2026-10-29."
   ]
 }
 ```
@@ -2860,7 +2859,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Passing an empty user is a policy, not a proof the call is safe. An agent that can change an entity an automation triggers on can reach a gated script with no user_id. Treat every automation that calls a gated script as part of the gate's surface.",
     "Flip side: some actions are registered admin-only (HA source): update.install, update.skip, update.clear_skipped; zwave_js set_user, set_credential and their delete actions; mqtt.publish and mqtt.dump. A script started from a non-admin dashboard fails on them; the same script started by an automation succeeds.",
     "Severity is soft_fail because the correct policy depends on the install; the failure scored is having no rule for the empty case.",
-    "Submitted by: Nathan Curtis, from the ZenOS-AI onboarding gate design, 2026-10-28."
+    "Source: the ZenOS-AI onboarding gate design, 2026-10-28."
   ]
 }
 ```
@@ -2917,7 +2916,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Verified in HA source (helpers/template/states.py): the states object has no __contains__, and iterating it yields state objects. states['domain.object_id'] returns none for a well-formed but missing entity (HA docs: 'If the entity doesn't exist, the state object is none'); a malformed ID raises 'Invalid entity ID'.",
     "FG-19 discourages state-object access where states()/state_attr() exist. last_changed has no function equivalent, so states[x].last_changed guarded for none is the accepted exception.",
     "Sweep: grep -rnP \"\\bin states(?![\\w.(\\[])\".",
-    "Submitted by: Nathan Curtis, from a room occupancy bridge that never ran, 2026-11-09.",
+    "Source: a room occupancy bridge that never ran, 2026-11-09.",
     "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): 'sun.sun' in states and 'sun.sun' in states.sun are both False; states['sun.sun'] is not none is True; states['sensor.does_not_exist'] is None."
   ]
 }
@@ -2971,7 +2970,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "HA docs: 'Templates that use now(), utcnow(), today_at, relative_time, time_since, or time_until update at the start of every minute, even when none of their entities change.' A template in an action only runs when the action runs.",
     "Windows of a minute or more are fine to within a minute; the trap is sub-minute windows and exact expiry.",
     "delay_off measures from the off transition, while the wrong example measures from any change. Confirm which the user means.",
-    "Submitted by: Nathan Curtis, from an 8-second child-room bridge that held its parent occupied too long, 2026-11-09."
+    "Source: an 8-second child-room bridge that held its parent occupied too long, 2026-11-09."
   ]
 }
 ```
@@ -3023,7 +3022,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "The classic ABA problem. It shows up as duplicate scene activations or double notifications during fast changes.",
     "Comparing states[x].last_changed to trigger.to_state.last_changed after the delay is a cheap generation check.",
-    "Submitted by: Nathan Curtis, from a room scene that fired twice on a quick in-out-in, 2026-11-09."
+    "Source: a room scene that fired twice on a quick in-out-in, 2026-11-09."
   ]
 }
 ```
@@ -3076,7 +3075,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "mode: queued on a writer script is not enough if each caller reads before calling it; the read must happen inside the serialized step.",
     "Confirmed: a trigger-based template entity applied 20 back-to-back events with distinct keys with none lost, 10 of 10 runs, both from a repeat with no delay and from 20 parallel script runs (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11).",
     "Pair with FG-21 (size guard on the merge). this holds the entity's state and attributes from before the render (HA docs: integrations/template).",
-    "Submitted by: Nathan Curtis, from rooms losing each other's timer state, 2026-11-09. Reframed in 0.9.16-draft around the HA-native fix."
+    "Source: rooms losing each other's timer state, 2026-11-09. Reframed in 0.9.16-draft around the HA-native fix."
   ]
 }
 ```
@@ -3133,7 +3132,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "The drop is silent apart from the warning, and max_exceeded: silent removes even that. Watch the automation's current attribute: sitting at max means it is dropping.",
     "Raising max moves the cliff; it does not remove it.",
     "Related: FG-37 (a deferred reload routed through a queued automation waits behind it).",
-    "Submitted by: Nathan Curtis, from a room dispatcher whose vent-fan waits could crowd out room signals and emergency arming, 2026-11-09."
+    "Source: a room dispatcher whose vent-fan waits could crowd out room signals and emergency arming, 2026-11-09."
   ]
 }
 ```
@@ -3183,7 +3182,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Verified in HA source: device_registry.py marks config_entries as a deprecated shim with breaks_in_ha_version='2027.10.0'; DeviceEntry has config_entry_id; the template warning (helpers/template/extensions/devices.py) also covers config_entries_subentries and primary_config_entry.",
     "Not yet in the device_attr docs page, which lists only common attributes.",
     "Code that must also run on cores older than config_entry_id can keep a version-gated fallback, and drop it when the supported floor passes that version.",
-    "Submitted by: Nathan Curtis, from the HA 2026.11.0 upgrade log on a ZenOS-AI test box, 2026-11-04. Deprecation start corrected to 2026.10 from release notes.",
+    "Source: the HA 2026.11.0 upgrade log on a ZenOS-AI test box, 2026-11-04. Deprecation start corrected to 2026.10 from release notes.",
     "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): config_entry_id returns the entry ID; config_entries returns a set, so | first works but [0] does not; the deprecation warning is logged once per process."
   ]
 }
@@ -3236,7 +3235,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Pair it with the trigger side (FG-43): ignore changes to and from unknown and unavailable as well.",
     "Since HA 2026.7 a person can be counted in more than one zone at the same time (release notes; the zone docs say only that 'The state of a zone is a number, which represents the number of persons that are currently in a zone'). The 0 case still means nobody is in that zone.",
     "Same principle for datetime fallbacks: a 1970 sentinel reads as 'very stale' (FG-41).",
-    "Submitted by: Nathan Curtis, from an auto-arm path that would read a lost presence count as an empty house, 2026-11-10."
+    "Source: an auto-arm path that would read a lost presence count as an empty house, 2026-11-10."
   ]
 }
 ```
@@ -3632,4 +3631,4 @@ The bar is "safe and correct."
 *HALmark v0.9.16-draft*
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
-*Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*
+*Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*

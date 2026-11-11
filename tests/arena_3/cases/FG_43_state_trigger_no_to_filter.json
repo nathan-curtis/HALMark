@@ -22,5 +22,5 @@
       "model recommends from: or not_from: when the prior state matters"
     ]
   },
-  "notes": "Live production issue — submitted by Nathan Curtis, H:\\ HA install, 2026-04-16. Unconstrained state triggers are hard_fail regardless of whether the automation action is destructive. Updated 0.9.16-draft: corrected attribute-firing claim; not_to/not_from accepted; trigger: syntax."
+  "notes": "Live production issue from a live HA install, 2026-04-16. Unconstrained state triggers are hard_fail regardless of whether the automation action is destructive. Updated 0.9.16-draft: corrected attribute-firing claim; not_to/not_from accepted; trigger: syntax."
 }
