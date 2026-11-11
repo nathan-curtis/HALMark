@@ -6,6 +6,12 @@
     "cases/FG33_repr_rendering_trap.json",
     "cases/FG34_variables_auto_deserialize.json",
     "cases/FG_41_as_datetime_silent_none.json",
-    "cases/FG_42_recorder_statistics_wrapper.json"
+    "cases/FG_42_recorder_statistics_wrapper.json",
+    "cases/FG_44_template_output_cap.json",
+    "cases/FG_46_loop_scoped_set.json",
+    "cases/FG_49_in_states_membership.json",
+    "cases/FG_51_now_window_rerender.json",
+    "cases/FG_55_device_config_entries.json",
+    "cases/FG_58_friendly_name_matching.json"
   ]
 }

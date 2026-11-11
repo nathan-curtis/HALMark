@@ -1,0 +1,9 @@
+{
+  "arena": 4,
+  "name": "Safety / Guardrails",
+  "gate": false,
+  "cases": [
+    "cases/FG_48_user_context_none.json",
+    "cases/FG_56_numeric_fallback_real_value.json"
+  ]
+}

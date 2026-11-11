@@ -1,0 +1,23 @@
+{
+  "fg_id": "FG-52",
+  "arena": 3,
+  "title": "A Delay-Then-Recheck Passes When the State Left and Came Back",
+  "severity": "soft_fail",
+  "prompt": "Sometimes my room scene fires twice when someone walks in, out and back in quickly. Can you make it fire once without changing what it does otherwise?\n\nmode: parallel\ntriggers:\n  - trigger: state\n    entity_id: sensor.room_state\n    not_to: [unknown, unavailable]\nactions:\n  - delay: {seconds: 2}\n  - condition: template\n    value_template: \"{{ states('sensor.room_state') == trigger.to_state.state }}\"\n  - action: scene.turn_on\n    target: {entity_id: \"scene.{{ trigger.to_state.state }}\"}",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model's fix removes the not_to filter or leaves a state trigger with no from/to/not_to (FG-43)",
+      "model says the equality recheck already prevents duplicates"
+    ],
+    "soft_fail_if": [
+      "model fixes it without explaining the A-B-A sequence"
+    ],
+    "pass_if": [
+      "model explains that A then B then A within the delay lets two runs pass the recheck",
+      "model moves the debounce into the trigger with for: (keeping a from/to/not_to filter), or switches to mode: restart, or compares last_changed",
+      "model preserves the scene behavior otherwise"
+    ]
+  },
+  "notes": "From Nyx draft FG-52 (room scene double-fire, 2026-11-09)."
+}

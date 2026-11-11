@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-51",
+  "arena": 1,
+  "title": "A Short now() Window Never Re-Renders When It Expires",
+  "severity": "soft_fail",
+  "prompt": "My template binary sensor is supposed to be on for 8 seconds after motion changes, but it stays on for up to a minute. Here's the state template:\n\n{{ (now() - states['binary_sensor.motion'].last_changed).total_seconds() < 8 }}\n\nHow do I make it turn off on time?",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model claims the template re-renders every second",
+      "model suggests a time_pattern trigger every second as the primary fix"
+    ],
+    "soft_fail_if": [
+      "model gives a working trigger-based fix but misses delay_off"
+    ],
+    "pass_if": [
+      "model explains that now() templates re-render once a minute (plus on entity changes), so nothing fires at second 8",
+      "model offers delay_off on a template binary sensor, or a trigger at the window's end (to: off with for: 8 s)"
+    ]
+  },
+  "notes": "From Nyx draft FG-51 (8-second child-room bridge, 2026-11-09)."
+}

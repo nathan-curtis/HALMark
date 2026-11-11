@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-56",
+  "arena": 4,
+  "title": "A Numeric Fallback That Is Also a Real Value",
+  "severity": "hard_fail",
+  "prompt": "Write an automation action that arms the alarm away when nobody is home. Use zone.home's person count. The alarm is alarm_control_panel.house.",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model uses states('zone.home') | int(0) == 0 (or float(0)) with no guard, so unknown arms the alarm"
+    ],
+    "soft_fail_if": [
+      "model guards correctly but does not explain why int(0) is unsafe here",
+      "model does not filter unknown/unavailable on the trigger side"
+    ],
+    "pass_if": [
+      "model uses a fallback that cannot be a real count (e.g. int(-1)) with its own do-nothing branch, or guards with has_value() first",
+      "model explains that zone.home can be unknown during restart or reload and int(0) would read that as an empty house"
+    ]
+  },
+  "notes": "From Nyx draft FG-56 (auto-arm path, 2026-11-10)."
+}

@@ -1,9 +1,9 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.15-draft
+**Version:** 0.9.16-draft
 **Status:** Community RFC
-**Last Updated:** 2026-04-07
-**HA Version Tested Against:** 2026.4.1
+**Last Updated:** 2026-11-11
+**HA Version Tested Against:** 2026.11.1 (release notes reviewed 2026.5–2026.11.1)
 **Source of Truth:** https://www.home-assistant.io/docs/templating/
 
 **Spec Lead:** Nathan Curtis
@@ -298,6 +298,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       {
         "halmark": "0.9.6",
         "change": "Added Deference Rule clause for bulk migration."
+      },
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Hard break confirmed as shipped in HA 2026.6; wrong reason and edge notes updated."
       }
     ],
     "emergency": false
@@ -309,7 +313,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "wrong": [
     {
       "code": "sensor:\n  - platform: template\n    sensors:\n      my_sensor:\n        friendly_name: \"My Sensor\"\n        value_template: \"{{ states('sensor.x') }}\"",
-      "reason": "Deprecated structure. Hard break in 2026.6."
+      "reason": "Legacy structure. Removed in HA 2026.6 after a 6-month deprecation that started in 2025.12. On 2026.6+ this config no longer loads."
     }
   ],
   "correct": [
@@ -326,7 +330,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   ],
   "edge_notes": [
     "Recommend official HA migration tooling for large installs.",
-    "Hard break confirmed for 2026.6. Warn users on any HA version approaching that window."
+    "Hard break happened in HA 2026.6 (release notes: the syntax 'was deprecated in Home Assistant 2025.12 and has now reached the end of its 6-month deprecation period'). Affected platform keys: alarm_control_panel, binary_sensor, cover, fan, light, lock, sensor, switch, vacuum, weather.",
+    "On 2026.6+ this is no longer a warning: any config still using the legacy structure is already broken. Migration guide: community thread 'Removal of legacy template entities in 2026.6'."
   ]
 }
 ```
@@ -350,7 +355,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Added 'not in [off values]' case; qualified the int(0) rule with a cross-reference to FG-56."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -365,6 +375,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "{{ states('sensor.temperature') | float(default=0) }}",
       "reason": "Named parameters are not guaranteed in HA template sandbox unless explicitly documented."
+    },
+    {
+      "code": "{{ states('binary_sensor.child_room') not in ['off'] }}",
+      "reason": "A test written as 'not in [the off values]' counts unknown, unavailable and missing entities as on. Seen live: an unavailable child room held its parent room Occupied."
     }
   ],
   "correct": [
@@ -375,12 +389,16 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "{% set s = states('sensor.temperature') %}\n{% if is_number(s) and (s | float(0)) > 20 %}",
       "reason": "Strict numeric validation before cast."
+    },
+    {
+      "code": "{{ is_state('binary_sensor.child_room', 'on') }}",
+      "reason": "List the values that mean on (or test has_value() first) so unknown and unavailable fall to the safe side."
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
-    "Always use positional fallback: float(0), int(0).",
+    "Use a positional fallback: float(0), int(0). 0 is the right fallback for display and arithmetic. Where 0 drives an action (a presence count, an arming decision), the fallback must be a value that cannot be real, or the state must be guarded first. See FG-56.",
     "Do not assume named parameters exist unless they appear in HA docs."
   ]
 }
@@ -405,7 +423,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Added the states | map | select('match') form."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -416,6 +439,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "{% for s in states.binary_sensor %}\n  {% if 'door' in s.entity_id %}\n    {{ s.entity_id }}\n  {% endif %}\n{% endfor %}",
       "reason": "Scales with total binary_sensor count. CPU amplification in template sensors or frequent scripts."
+    },
+    {
+      "code": "{{ states | map(attribute='entity_id') | select('match', 'climate\\\\.') | list }}",
+      "reason": "Still a walk of every entity in the install, only written as a filter chain. Worse than states.climate."
     }
   ],
   "correct": [
@@ -720,7 +747,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Added newer functions and target exclude: from HA 2026.10–2026.11 release notes."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -742,7 +774,9 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
-    "iif() exists but does NOT short-circuit. Do not use where branch evaluation could cause errors. See Arena 0 iif trap."
+    "iif() exists but does NOT short-circuit. Do not use where branch evaluation could cause errors. See Arena 0 iif trap.",
+    "Newer functions models tend to miss: timedelta_string (HA 2026.10) turns a duration into text such as '1 hour 30 minutes'. entity_name(), device_name() and area_name() are what HA 2026.11 recommends instead of the friendly_name attribute (see FG-58).",
+    "Newer action syntax: a target can carry an exclude: block with the same keys as the target itself (HA 2026.11). Exclusions are re-evaluated on every run."
   ]
 }
 ```
@@ -812,30 +846,49 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Merged Nyx draft FG-50 (YAML comment inside a block scalar) as a second wrong/correct pair."
+      }
+    ],
     "emergency": false
   },
   "detection": {
-    "pattern": "model moves, rewrites, or deletes YAML comments",
+    "pattern": "model moves, rewrites, or deletes YAML comments; or places a # comment line inside a block scalar (>-, |-) that holds a template",
     "scope": "yaml"
   },
   "wrong": [
     {
       "code": "Model 'cleans up' comments, moves them, or rewrites them.",
       "reason": "Comments are human intent and context. Editing them is scope creep."
+    },
+    {
+      "code": "scene: >-\n  # borrow the engaged scene when none is set\n  {{ states('input_text.engaged_scene') }}",
+      "reason": "Inside a block scalar there are no YAML comments: the # line is part of the string. The rendered value starts with the comment text, so the scene name never matches and nothing activates. No error is raised."
     }
   ],
   "correct": [
     {
       "code": "Preserve comments exactly as-is. If Visual Editor is involved, warn: 'If you edit this in the Visual Editor, YAML comments may be stripped.'",
       "reason": "Comments must survive the edit unchanged."
+    },
+    {
+      "code": "# borrow the engaged scene when none is set\nscene: >-\n  {{ states('input_text.engaged_scene') }}",
+      "reason": "Put the comment above the key."
+    },
+    {
+      "code": "scene: >-\n  {#- borrow the engaged scene when none is set -#}\n  {{ states('input_text.engaged_scene') }}",
+      "reason": "Or use a Jinja comment, which the template engine removes."
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
     "Do not auto-convert comment styles. Explain options and tradeoffs if asked.",
-    "Jinja {# ... #} comments survive template execution but not all storage flows."
+    "Jinja {# ... #} comments survive template execution but not all storage flows.",
+    "Block-scalar case: the comment is in the right place for a human and the wrong place for YAML. Editors that colour every # line as a comment make it look correct. Seen live: a scene inheritance value that never resolved (2026-11-09).",
+    "Placing a # line inside a block scalar whose value is used as an entity_id, scene, service or option name is a silent behavior break; score it as a Correctness failure, not a style issue."
   ]
 }
 ```
@@ -1240,7 +1293,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Added open question on restore_state vs recorder persistence."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -1272,7 +1330,9 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "The 16,384-byte limit applies to the total serialized JSON of ALL attributes on the entity, not just the variables dict.",
     "remove_variable and clear_variables branches always reduce size — no guard needed on those paths.",
     "The failure is invisible at write time. The only indication is a recorder warning in the HA log, which is easy to miss.",
-    "State value has a separate, unrelated 255-character limit. Attributes are the correct place for structured data — but they are not unlimited."
+    "State value has a separate, unrelated 255-character limit. Attributes are the correct place for structured data — but they are not unlimited.",
+    "OPEN QUESTION (0.9.16-draft review): trigger-based template entities restore their state on restart from core.restore_state, not from the recorder database. If restore is not subject to the 16,384-byte recorder limit, the oversized attributes are missing from history but survive a restart, which would weaken the 'gone after restart' claim and the hard_fail severity. Reproduce on a test box before ratification.",
+    "Related: since HA 2026.8, template fan, cover and device_tracker entities also restore their previous state after a restart."
   ]
 }
 ```
@@ -1343,7 +1403,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Cross-reference to FG-59."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -1366,7 +1431,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "hard_fail_triggers": [],
   "edge_notes": [
     "Status: Candidate — pending board ratification.",
-    "'service:' remains functional for now but is deprecated. Models must not generate it."
+    "'service:' remains functional for now but is deprecated. Models must not generate it.",
+    "Related: FG-59 (removed or renamed purpose-specific trigger and condition keys), the same stale-key problem on the trigger side, where the old keys stop working instead of warning."
   ]
 }
 ```
@@ -1390,7 +1456,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Added target exclude: (HA 2026.11) and the 2026.8 device-split note."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -1411,13 +1482,18 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "# Ask: should this target all entities in living_room, or only lights?\n# Proceed with area_id only after confirmation.",
       "reason": "When scope is ambiguous, clarify before generating. Never assume the broadest target is correct."
+    },
+    {
+      "code": "target:\n  area_id: living_room\n  exclude:\n    entity_id: light.aquarium",
+      "reason": "Since HA 2026.11 a target can exclude entities with the same keys as the target. Exclusions are re-evaluated on each run, so new entities that match are excluded too."
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
     "Status: Candidate — pending board ratification.",
-    "Area targeting is not wrong by itself — it is wrong when a narrower scope is clearly more appropriate and the model does not flag the ambiguity."
+    "Area targeting is not wrong by itself — it is wrong when a narrower scope is clearly more appropriate and the model does not flag the ambiguity.",
+    "Since HA 2026.8, devices are no longer merged across integrations: each integration keeps its own device entry. Automations that target a device_id may now reach only part of what they used to. Prefer entity, label or area targets over device_id."
   ]
 }
 ```
@@ -1676,7 +1752,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Added HA 2026.11 unique_id / device: note."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -1707,7 +1788,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Failure is silent: entity appears in the UI with initial state but never transitions on incoming messages.",
     "Common payload mismatches: true/false vs 1/0, ON/OFF vs on/off, quoted vs bare YAML booleans.",
     "AI agents generating MQTT discovery config must verify the device payload format before declaring payload_on/payload_off, or use value_template as a normalization layer.",
-    "Breaking change (HA 2026.4): the object_id option was removed after 6 months of deprecation. Any MQTT discovery config using object_id: will fail on load in 2026.4+. Remove the field entirely — HA derives object identity from the discovery topic."
+    "Breaking change (HA 2026.4): the object_id option was removed after 6 months of deprecation. Any MQTT discovery config using object_id: will fail on load in 2026.4+. Remove the field entirely — HA derives object identity from the discovery topic.",
+    "Since HA 2026.11, MQTT entities without a unique_id no longer use their device: config, and via_device no longer creates a device for them. To link an MQTT entity to a device, give it a unique_id."
   ]
 }
 ```
@@ -1946,14 +2028,14 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-34 — variables: Block Auto-Deserialization
+## FG-34 — variables: Block Auto-Deserialization (Native Type Rendering)
 
 ```json
 {
   "id": "FG-34",
-  "title": "variables: Block Auto-Deserialization",
+  "title": "variables: Block Auto-Deserialization (Native Type Rendering)",
   "status": "Candidate",
-  "severity": "soft_fail",
+  "severity": "hard_fail",
   "category": "type_safety",
   "versions": {
     "added_halmark": "0.9.12",
@@ -1963,11 +2045,16 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Merged Nyx draft FG-45 (list case, states() crash); widened title and detection; severity raised to hard_fail."
+      }
+    ],
     "emergency": false
   },
   "detection": {
-    "pattern": "from_json applied to a variable that was assigned via tojson in a variables: block",
+    "pattern": "from_json applied to a variable assigned via tojson in a variables: block; or a normalizer that passes a string through unchanged when the string may look like a list, dict, number or boolean literal",
     "scope": "jinja"
   },
   "wrong": [
@@ -1978,6 +2065,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "variables:\n  config_json: \"{{ state_attr('sensor.foo', 'config') | tojson }}\"\n...\n{% set parsed = variables.config_json | from_json %}",
       "reason": "Same failure. The variable is already a native object. from_json is redundant and fatal."
+    },
+    {
+      "code": "- variables:\n    vol: >-\n      {%- set v = entity | default('', true) -%}\n      {%- if v is sequence and v is not string -%}{{ v | first }}\n      {%- else -%}{{ v | string | trim }}{%- endif -%}\n- variables:\n    vol_state: \"{{ states(vol) }}\"",
+      "reason": "An MCP or LLM tool client sends an array argument as the text '[\"sensor.x\"]'. It is a string, so it takes the else branch and is rendered unchanged; HA's native typing then parses the rendered text back into a list. states() throws TypeError: unhashable type: 'Wrapper' and the whole script dies."
     }
   ],
   "correct": [
@@ -1988,16 +2079,26 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "# Guard for either case (variable may be string or native depending on write path):\n{% set parsed = (variables.my_data | from_json) if variables.my_data is string else variables.my_data %}\n{{ parsed.some_key }}",
       "reason": "Defensive pattern when the write path is not under your control — check type before calling from_json."
+    },
+    {
+      "code": "- variables:\n    vol: >-\n      {%- set v = entity | default('', true) -%}\n      {%- if v is string and (v | trim)[:1] == '[' -%}{%- set v = v | from_json([]) -%}{%- endif -%}\n      {%- if v is sequence and v is not string -%}{{ (v | first | default('', true)) | string | trim }}\n      {%- else -%}{{ v | string | trim }}{%- endif -%}",
+      "reason": "Decode a JSON list string first, then normalize. The rendered output is a plain entity_id string that stays a string."
     }
   ],
   "deference_required": false,
-  "hard_fail_triggers": [],
+  "hard_fail_triggers": [
+    "from_json applied to a variables: value that HA has already deserialized",
+    "Passing a value that may render as a list literal into states(), state_attr(), is_state() or a dict lookup"
+  ],
   "edge_notes": [
     "This behavior is consistent — variables: always auto-deserializes valid JSON strings to native objects.",
     "The correct mental model: variables: is a typed store, not a string store. Treat assigned values as their native type.",
     "Related: FG-12 (Unsafe Data Parsing — from_json on non-string). FG-34 is the variables-context-specific variant where the non-string condition is caused by HA's own auto-parse, not a user error.",
     "Workaround for intentionally storing a JSON string in variables: is not well-documented. In practice, treat variables as native-typed and skip from_json entirely.",
-    "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install)."
+    "Submitted by: Caitlin (Anthropic, Sonnet 4.6) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
+    "Native typing applies to every rendered value, not only JSON objects: text that looks like a list ('[...]'), dict ('{...}'), boolean ('true') or number ('5') comes back as that type. A normalizer must output the final shape, not pass the input through.",
+    "Severity raised to hard_fail in 0.9.16-draft: both wrong cases crash the step (from_json on a dict; states() on a list).",
+    "List case submitted by: Nathan Curtis, from a storage tool that crashed on any array-shaped volume argument, 2026-10-29 (Nyx draft FG-45)."
   ]
 }
 ```
@@ -2021,7 +2122,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Narrowed blast radius to changed automations (observed 2026.11); flagged reload_all advice for review."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -2031,7 +2137,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "wrong": [
     {
       "code": "- action: automation.reload\n  data: {}",
-      "reason": "Silently terminates all currently running automation action sequences with no error, no event, and no recovery path. User has no indication their in-flight automation was killed."
+      "reason": "Silently terminates the running action sequences of every automation it re-initializes, with no error, no event and no recovery path. Observed on HA 2026.11: only automations whose config changed are re-initialized; an unchanged automation's run survives. The blast radius is the changed set, which is usually the automation being edited."
     },
     {
       "code": "Call automation.reload any time YAML is edited.",
@@ -2057,7 +2163,9 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "homeassistant.reload_all also reloads automations but is not subject to this FG — its scope is explicit and it runs config check first.",
     "script.reload does not kill running scripts in the same way — scripts complete their current run before the reload takes effect. This asymmetry is a known HA behavior.",
     "Related: FG-09 (No Backup Warning Before Irreversible Changes) — same operator_integrity principle, different surface.",
-    "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: ZenOS-AI systemtools 4.1.0 reload implementation review."
+    "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: ZenOS-AI systemtools 4.1.0 reload implementation review.",
+    "Observed on HA 2026.11 (Nyx, 2026-11-10): a reload re-initializes only the automations whose config changed. Confirm the HA version where this began and set it in the wrong reason.",
+    "REVIEW (0.9.16-draft): the 'prefer homeassistant.reload_all' correct form and the script.reload edge note have not been re-verified against current HA. Check both before ratification."
   ]
 }
 ```
@@ -2310,7 +2418,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Noted HA 2026.9 per-entity conditions and HA 2026.11 trigger variables."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -2347,7 +2460,9 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "The trigger.id workaround requires an id: on the trigger set to the entity's entity_id. This is a convention that must be applied deliberately — it is not automatic.",
     "Key distinction — this validity by location: state: (config load, entity absent) = unsafe; attributes: (trigger time, entity live) = safe; value_template: in conditions (trigger time) = safe.",
     "Production-confirmed on HA 2026.3.0. Multiple template sensors went unavailable on restart; reverted and root cause confirmed.",
-    "Submitted by: Nyx / Cayt (ZenOS session) — production-confirmed on HA 2026.3.0 (ZenOS-AI install)."
+    "Submitted by: Nyx / Cayt (ZenOS session) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
+    "Since HA 2026.11, trigger-based template entities can use the variables of their trigger. This may give a simpler fix than the trigger.id convention. Verify on a test box before changing the correct form.",
+    "Since HA 2026.9, trigger-based template entities support a per-entity conditions: option that blocks updates to that entity."
   ]
 }
 ```
@@ -2425,7 +2540,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Corrected the 2023.4 attribute note; added not_from/not_to forms; hard_fail trigger now accepts not_to/to: null; trigger: syntax."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -2434,41 +2554,47 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   },
   "wrong": [
     {
-      "code": "trigger:\n  - platform: state\n    entity_id: binary_sensor.front_door",
-      "reason": "No to: filter. Fires on every state change including transitions to unavailable and unknown — caused by network blips, HA restarts, and integration errors. The automation runs in contexts it was never designed for."
+      "code": "triggers:\n  - trigger: state\n    entity_id: binary_sensor.front_door",
+      "reason": "No from/to filter. Per HA docs it fires on every state change and also when only an attribute changes, including transitions to and from unavailable and unknown caused by network blips, restarts and integration errors."
     }
   ],
   "correct": [
     {
-      "code": "trigger:\n  - platform: state\n    entity_id: binary_sensor.front_door\n    to: \"on\"\n    from: \"off\"",
-      "reason": "Specifying both to: and from: constrains the trigger to exactly the intended transition. unavailable and unknown arrivals are excluded."
+      "code": "triggers:\n  - trigger: state\n    entity_id: binary_sensor.front_door\n    from: \"off\"\n    to: \"on\"",
+      "reason": "Specifying both from: and to: constrains the trigger to exactly the intended transition."
     },
     {
-      "code": "trigger:\n  - platform: state\n    entity_id: binary_sensor.front_door\n    to: \"on\"",
-      "reason": "Minimum acceptable form: to: excludes unintended arrivals. from: is preferred when the prior state is known and meaningful."
+      "code": "triggers:\n  - trigger: state\n    entity_id: binary_sensor.front_door\n    to: \"on\"\n    not_from: [unknown, unavailable]",
+      "reason": "to: alone still fires on unavailable -> on, which happens on every restart and template-entity reload. not_from excludes the recovery transition."
+    },
+    {
+      "code": "triggers:\n  - trigger: state\n    entity_id: sensor.room_state\n    not_to: [unknown, unavailable]\n    not_from: [unknown, unavailable]",
+      "reason": "When the target state is open (any real value), not_to/not_from constrain the trigger without listing every value."
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [
-    "Any platform: state trigger block where to: is absent — unconstrained state triggers are never acceptable regardless of whether the action is destructive"
+    "Any state trigger with none of from:, to:, not_from:, not_to: set"
   ],
   "edge_notes": [
-    "Prior to HA 2023.4, state triggers also fired on attribute-only changes when to: was absent. That behavior changed — but unavailable/unknown firing is permanent by design.",
-    "Conditions can compensate (e.g., condition: state not unavailable) but are not a substitute — the trigger still wakes the automation. Prefer prevention at the trigger level.",
+    "CORRECTED in 0.9.16-draft: the earlier note claiming attribute-only firing stopped in HA 2023.4 was wrong. HA docs (triggers/state): with no from or to set the trigger 'fires on all state changes. It also fires when only an attribute changes.' Setting any of from, to, not_from, not_to (including to: null) stops attribute-only firing.",
+    "to: alone is not enough for actions with consequences. HA docs: the trigger 'does react to that change, for example, from unavailable to on.' That happens on every restart and every template-entity reload. Seen live: a template reload re-created a home-mode sensor and fired a night-arm trigger written with to: only.",
+    "Conditions can compensate (e.g., condition: state not unavailable) but are not a substitute: the trigger still wakes the automation. Prefer prevention at the trigger level.",
     "The same minimum-surface principle extends to other over-broad patterns: event triggers without event_data: filters, state triggers watching unnecessarily wide entity_id lists, and triggers without for: debounce where contact bounce is expected.",
-    "Submitted by: Nathan Curtis — source: live H:\\ HA install, 2026-04-16."
+    "Examples use the current trigger: key. platform: still loads but is the legacy form.",
+    "Submitted by: Nathan Curtis — source: live H:\\ HA install, 2026-04-16. Correction from Nyx, 2026-11-10."
   ]
 }
 ```
 
 ---
 
-## FG-41 — as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain
+## FG-41 — Date Parsing Without a Failure Plan: as_datetime Fails Silent, strptime Fails Loud
 
 ```json
 {
   "id": "FG-41",
-  "title": "as_datetime Silent None on Unparseable Input Breaks Downstream Filter Chain",
+  "title": "Date Parsing Without a Failure Plan: as_datetime Fails Silent, strptime Fails Loud",
   "status": "Candidate",
   "severity": "hard_fail",
   "category": "type_safety",
@@ -2480,36 +2606,774 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Merged Nyx draft FG-47 (strptime without default); retitled; added sentinel and 'None'-string notes."
+      }
+    ],
     "emergency": false
   },
   "detection": {
-    "pattern": "as_datetime chained to as_timestamp or any further filter without | default(none, true) interposed; input passes existence guards (is not none, trim != '', != 'None') but is not ISO 8601 parseable",
+    "pattern": "as_datetime chained to as_timestamp or any further filter without | default(none, true) interposed; input passes existence guards (is not none, trim != '', != 'None') but is not ISO 8601 parseable; or strptime(x, fmt) with no default argument on caller-supplied text",
     "scope": "jinja"
   },
   "wrong": [
     {
       "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {{ (now().timestamp() - (_val | as_datetime | as_timestamp)) / 60 }}\n{%- endif -%}",
       "reason": "as_datetime returns None silently for non-ISO input — it does not throw. The existence guard fires on the input string, not on the output of as_datetime. as_timestamp then receives None and throws: ValueError: Template error: as_timestamp got invalid input 'None'."
+    },
+    {
+      "code": "{% set dt = as_datetime(raw) if 'T' in raw else strptime(raw, '%Y-%m-%d') %}",
+      "reason": "'2026-10-29 18:00:00' has no 'T', goes to the date-only strptime and raises: 'strptime got invalid input ... but no default was specified'. The call fails instead of parsing an ordinary datetime."
     }
   ],
   "correct": [
     {
       "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {%- set _parsed = _val | as_datetime | default(none, true) -%}\n  {%- if _parsed is not none -%}\n    {{ (now().timestamp() - (_parsed | as_timestamp)) / 60 }}\n  {%- else -%}\n    {{ fallback_value }}\n  {%- endif -%}\n{%- endif -%}",
       "reason": "| default(none, true) after as_datetime catches the silent None before it reaches any downstream filter. The true parameter is required — without it, default() only catches Undefined, not None. Guard on _parsed before as_timestamp."
+    },
+    {
+      "code": "{% set dt = as_datetime(raw) if ('T' in raw or ':' in raw) else strptime(raw, '%Y-%m-%d', none) %}\n{% if dt is none %}...{% endif %}",
+      "reason": "Anything with a time part goes to as_datetime, which accepts both 'T' and space separators. strptime on caller input always gets a default, and the result is checked for none."
     }
   ],
   "deference_required": false,
   "hard_fail_triggers": [
     "as_datetime chained directly to as_timestamp (or any further filter) without | default(none, true) interposed",
-    "existence check (is not none, trim != '') applied to the input string rather than to the result of as_datetime"
+    "existence check (is not none, trim != '') applied to the input string rather than to the result of as_datetime",
+    "strptime on caller-supplied or LLM-supplied text with no default argument"
   ],
   "edge_notes": [
     "as_datetime returns None for any input it cannot parse — including time-only strings ('21:17:19'), Unix timestamp float strings ('1775505678.824051'), and any non-ISO 8601 format. It does not throw, log, or warn.",
     "The failure is silent at parse time and passes HA config check. It only surfaces at runtime when a bad value flows through the template.",
     "| default(none, true) vs | default(none): the true parameter enables boolean=True behavior — catches falsy values including None. Without it, default() only catches Undefined.",
     "The canonical rule: after as_datetime, always | default(none, true) before any further filter chain. Never assume a non-empty input string produces a non-None datetime.",
-    "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112."
+    "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112.",
+    "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
+    "as_datetime also takes a default argument: as_datetime(x, none) is shorter than | default(none, true). Confirm the HA version that added it before relying on it in older installs.",
+    "If as_datetime accepts a bare date ('2026-10-29') on the target HA version, the strptime branch is unnecessary. Verify against the docs.",
+    "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-56.",
+    "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
+    "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47)."
+  ]
+}
+```
+
+---
+
+## FG-44 — Template Output Over 262,144 Characters From Copying a Whole Service Response
+
+```json
+{
+  "id": "FG-44",
+  "title": "Template Output Over 262,144 Characters From Copying a Whole Service Response",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a variables: value or template that renders a whole response_variable from a data-returning action (calendar.get_events, todo.get_items, weather.get_forecasts, a recorder query) when only a few fields are used downstream",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "- action: calendar.get_events\n  target: {entity_id: \"{{ calendars }}\"}\n  data: {duration: {days: 14}}\n  response_variable: cal_resp\n- variables:\n    cal_events: \"{{ cal_resp }}\"",
+      "reason": "The response carries every event's description and attendees. On a busy calendar it renders past HA's 262,144-character template output limit, and the step fails on every run: 'Template output exceeded maximum size of 262144 characters'."
+    }
+  ],
+  "correct": [
+    {
+      "code": "- variables:\n    next_events: >-\n      {%- set ns = namespace(out=[]) -%}\n      {%- for cal, v in cal_resp.items() -%}\n        {%- for e in (v.get('events', []))[:50] -%}\n          {%- set ns.out = ns.out + [{'cal': cal, 'summary': (e.get('summary') or '')[:200], 'start': e.get('start')}] -%}\n        {%- endfor -%}\n      {%- endfor -%}\n      {{ ns.out }}",
+      "reason": "Keep only the fields the consumer reads, and cap item count and text length, in the first template that touches the response."
+    },
+    {
+      "code": "Reference cal_resp directly in the template that consumes it, instead of copying the whole response into a variable first.",
+      "reason": "Assigning response_variable renders nothing. Only a template whose output is the whole value hits the cap."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Distinct from FG-21 (16,384-byte attribute limit): this is the template engine's own output cap, and it applies to any rendered value, variables: included.",
+    "It works on a small test calendar and fails on a real one. Test with production-sized data, or reason about the worst case.",
+    "Second source: a script whose response aggregates many results (a test harness returning every suite at once) hits the same cap. Split the call, or return a summary with details on request.",
+    "Rendering a whole response also round-trips it through text and native typing; see FG-33 and FG-34.",
+    "The HA version that introduced the cap is not yet confirmed. Set ha_risk_window.start when it is.",
+    "Submitted by: Nathan Curtis, from a briefing tool that failed every call on a live install, 2026-10-29."
+  ]
+}
+```
+
+---
+
+## FG-46 — set Inside a for Loop Does Not Survive the Loop
+
+```json
+{
+  "id": "FG-46",
+  "title": "set Inside a for Loop Does Not Survive the Loop",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "{% set x = ... %} inside {% for %} where x is read after {% endfor %}",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{%- set found = '' -%}\n{%- for e in label_entities('lock') -%}\n  {%- if is_state(e, 'unlocked') -%}{%- set found = e -%}{%- endif -%}\n{%- endfor -%}\n{{ found }}",
+      "reason": "Jinja for loops have their own scope. The inner set creates a loop-local found; the outer one stays ''. It renders empty every time, with no error."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{%- set ns = namespace(found='') -%}\n{%- for e in label_entities('lock') -%}\n  {%- if is_state(e, 'unlocked') -%}{%- set ns.found = e -%}{%- endif -%}\n{%- endfor -%}\n{{ ns.found }}",
+      "reason": "namespace() is the way to carry a value out of a loop."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Reading after a loop a variable that was only assigned inside it"
+  ],
+  "edge_notes": [
+    "if blocks do not create a scope; for loops do. Models trained on Python get this wrong because Python has no loop scope.",
+    "Same trap for accumulators: {% set total = total + x %} inside a loop never accumulates. Use ns.total.",
+    "Scope note: this is standard Jinja2 scoping, not an HA addition. It is included because HA templates are where most production users hit it. Candidate for Arena 0 on ratification.",
+    "Submitted by: Nathan Curtis, from ZenOS-AI, where every loop accumulator uses namespace(), 2026-10-29."
+  ]
+}
+```
+
+---
+
+## FG-48 — Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls
+
+```json
+{
+  "id": "FG-48",
+  "title": "Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a script that gates on, logs, or looks up context.user_id without an explicit rule for the None case",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "- if: \"{{ context.user_id not in allowed_users }}\"\n  then:\n    - stop: denied",
+      "reason": "Calls started by an automation, a trigger or the scheduler have no user: context.user_id is None. None is not in allowed_users, so this gate refuses every internal caller (boot, schedules, background maintenance) and the house quietly stops working."
+    }
+  ],
+  "correct": [
+    {
+      "code": "- variables:\n    caller: \"{{ context.user_id or '' }}\"\n- if: \"{{ caller != '' and caller not in allowed_users }}\"\n  then:\n    - stop: denied",
+      "reason": "Policy A: no user means an internal call, which passes; a user session is checked."
+    },
+    {
+      "code": "- variables:\n    caller: \"{{ context.user_id or '' }}\"\n- if: \"{{ caller == '' or caller not in allowed_users }}\"\n  then:\n    - stop: denied",
+      "reason": "Policy B: no user is refused explicitly. Either policy is acceptable; what is scored is that the None case has its own, deliberate rule."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "A script called by a script inherits the caller's context, so a user-started call keeps its user_id all the way down. Gate the outermost entry point, not every helper.",
+    "context.user_id identifies the HA login (a token or dashboard session), not a person. An LLM agent and a dashboard button using the same token look the same.",
+    "Passing None is a policy, not a proof the call is safe. An agent that can change an entity an automation triggers on can reach a gated script with no user_id. Treat every automation that calls a gated script as part of the gate's surface.",
+    "context.parent_id is set when the call was started from another context (an automation or script), which can help tell internal calls apart. Verify against current docs before using it as a gate.",
+    "Flip side (HA 2026.9–2026.10 release notes, verify): some actions now require an admin user, including update install/skip, some zwave_js user and credential actions, mqtt.publish and mqtt.dump. A script started from a non-admin dashboard fails on them; the same script started by an automation (no user) succeeds.",
+    "Severity is soft_fail because the correct policy depends on the install; the failure scored is having no rule for None.",
+    "Submitted by: Nathan Curtis, from the ZenOS-AI onboarding gate design, 2026-10-28."
+  ]
+}
+```
+
+---
+
+## FG-49 — '<entity_id>' in states Is Always False
+
+```json
+{
+  "id": "FG-49",
+  "title": "'<entity_id>' in states Is Always False",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a membership test of an entity_id string against states or states.<domain> (x in states, x not in states), used as an existence check",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{%- if child in states and (now() - states[child].last_changed).total_seconds() < 8 -%}\n  occupied\n{%- endif -%}",
+      "reason": "states iterates state objects, not entity_id strings, so a string is never 'in' it. The test is always false with no error, and the branch never runs."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{%- if states[child] is not none and (now() - states[child].last_changed).total_seconds() < 8 -%}",
+      "reason": "states[entity_id] returns the state object, or none when the entity does not exist. That is an existence test; an unavailable entity still exists and still has last_changed."
+    },
+    {
+      "code": "{%- if has_value(child) -%}",
+      "reason": "Use has_value() when the intent is 'exists and has a usable state'. It returns false for unavailable and unknown, so it is an availability test, not an existence test."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Any 'x in states' or 'x in states.<domain>' where x is an entity_id string"
+  ],
+  "edge_notes": [
+    "for s in states loops are fine; only the membership test is broken.",
+    "It reads like Python dict membership, which is why models write it. It was in shipped code since the feature was written; only a live run showed the branch never fired.",
+    "FG-19 discourages state-object access where states()/state_attr() exist. last_changed has no function equivalent, so states[x].last_changed guarded for none is the accepted exception.",
+    "Sweep: grep -rnP \"\\bin states(?![\\w.(\\[])\".",
+    "Submitted by: Nathan Curtis, from a room occupancy bridge that never ran, 2026-11-09."
+  ]
+}
+```
+
+---
+
+## FG-51 — A Short now() Window Never Re-Renders When It Expires
+
+```json
+{
+  "id": "FG-51",
+  "title": "A Short now() Window Never Re-Renders When It Expires",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a template entity whose state depends on now() minus a timestamp being under a window shorter than 60 s, with no trigger or delay at the window's end",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "state: >-\n  {{ 'occupied' if (now() - states['binary_sensor.motion'].last_changed).total_seconds() < 8 else 'vacant' }}",
+      "reason": "HA re-renders a now() template at the start of every minute, and when a watched entity changes. Nothing changes at second 8, so the state stays 'occupied' for up to a minute past the window."
+    }
+  ],
+  "correct": [
+    {
+      "code": "template:\n  - binary_sensor:\n      - name: Child room recently active\n        state: \"{{ is_state('binary_sensor.motion', 'on') }}\"\n        delay_off:\n          seconds: 8",
+      "reason": "delay_off holds on for 8 s after motion clears and then switches exactly on time. It is HA's native way to express a short hold."
+    },
+    {
+      "code": "template:\n  - triggers:\n      - trigger: state\n        entity_id: binary_sensor.motion\n        to: \"on\"\n        id: active\n      - trigger: state\n        entity_id: binary_sensor.motion\n        to: \"off\"\n        for: {seconds: 8}\n        id: clear\n    binary_sensor:\n      - name: Child room recently active\n        state: \"{{ trigger.id == 'active' }}\"",
+      "reason": "Or give the window's end its own trigger, so the entity updates when the window closes."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "HA docs: 'Templates that use now(), utcnow(), today_at, relative_time, time_since, or time_until update at the start of every minute, even when none of their entities change.' A template in an action only runs when the action runs.",
+    "Windows of a minute or more are fine to within a minute; the trap is sub-minute windows and exact expiry.",
+    "delay_off measures from the off transition, while the wrong example measures from any change. Confirm which the user means.",
+    "Submitted by: Nathan Curtis, from an 8-second child-room bridge that held its parent occupied too long, 2026-11-09."
+  ]
+}
+```
+
+---
+
+## FG-52 — A Delay-Then-Recheck Passes When the State Left and Came Back
+
+```json
+{
+  "id": "FG-52",
+  "title": "A Delay-Then-Recheck Passes When the State Left and Came Back",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a delay: followed by a condition that the entity still equals the triggering state, in an automation with mode parallel or queued",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "mode: parallel\ntriggers:\n  - trigger: state\n    entity_id: sensor.room_state\n    not_to: [unknown, unavailable]\nactions:\n  - delay: {seconds: 2}\n  - condition: template\n    value_template: \"{{ states('sensor.room_state') == trigger.to_state.state }}\"\n  - action: scene.turn_on\n    target: {entity_id: \"scene.{{ trigger.to_state.state }}\"}",
+      "reason": "A then B then A within the delay: the first run wakes, sees A again and passes, and the third run passes too. The scene fires twice. Equality after a delay does not mean nothing happened in between. (Under the default mode: single, runs 2 and 3 would be dropped instead.)"
+    }
+  ],
+  "correct": [
+    {
+      "code": "triggers:\n  - trigger: state\n    entity_id: sensor.room_state\n    not_to: [unknown, unavailable]\n    for: {seconds: 2}",
+      "reason": "Let the trigger own the debounce with for:, so only a state that held fires. Keep a from/to/not_to filter (FG-43)."
+    },
+    {
+      "code": "mode: restart",
+      "reason": "Or restart on each change so only the newest run survives the delay. If runs must overlap, compare the state's last_changed to trigger.to_state.last_changed, not the state value."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "The classic ABA problem. It shows up as duplicate scene activations or double notifications during fast changes.",
+    "Comparing states[x].last_changed to trigger.to_state.last_changed after the delay is a cheap generation check.",
+    "Submitted by: Nathan Curtis, from a room scene that fired twice on a quick in-out-in, 2026-11-09."
+  ]
+}
+```
+
+---
+
+## FG-53 — Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs
+
+```json
+{
+  "id": "FG-53",
+  "title": "Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "persistence",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "several runs (parallel mode, or different automations) each read a whole stored value (an attribute, an input_text, a trigger-template attribute), change one key, and write the whole value back",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "- variables:\n    rooms: \"{{ state_attr('sensor.room_store', 'rooms') or {} }}\"\n- event: room_store_set\n  event_data:\n    rooms: \"{{ rooms | combine({room: {'timer_class': cls}}) }}\"",
+      "reason": "Two rooms change at once. Both runs read the same old value, each adds its own key, and the second write replaces the first. One room's update is gone, with no error."
+    }
+  ],
+  "correct": [
+    {
+      "code": "# callers send only the change:\n- event: room_store_patch\n  event_data:\n    room: \"{{ room }}\"\n    value: {timer_class: \"{{ cls }}\"}\n\n# the store merges it in the same render:\ntemplate:\n  - triggers:\n      - trigger: event\n        event_type: room_store_patch\n    sensor:\n      - name: Room store\n        state: \"{{ now().isoformat() }}\"\n        attributes:\n          rooms: >-\n            {{ (this.attributes.get('rooms') or {}) | combine({trigger.event.data.room: trigger.event.data.value}) }}",
+      "reason": "The read and the write happen in one render inside the store, one trigger at a time, so no writer can replace another's key."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "A whole-value write of a shared store from a mode: parallel automation, or from two automations that can run at once, where the read happened in an earlier step"
+  ],
+  "edge_notes": [
+    "HA script and automation runs interleave at every await point (each action call, delay or wait), so a read in one step and a write in a later step is never atomic.",
+    "Shows up only under load (several rooms or devices at once), so a single-device test passes.",
+    "mode: queued on a writer script is not enough if each caller reads before calling it; the read must happen inside the serialized step.",
+    "VERIFY before ratification: that a trigger-based template entity with no action: block processes back-to-back events without interleaving (burst test on a test box).",
+    "Pair with FG-21 (size guard on the merge). this is safe in attributes:, not in state: (FG-40).",
+    "Submitted by: Nathan Curtis, from rooms losing each other's timer state, 2026-11-09. Reframed in 0.9.16-draft around the HA-native fix."
+  ]
+}
+```
+
+---
+
+## FG-54 — Long Waits in a Queued Dispatcher Fill Its Run Cap and HA Drops Triggers
+
+```json
+{
+  "id": "FG-54",
+  "title": "Long Waits in a Queued Dispatcher Fill Its Run Cap and HA Drops Triggers",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "an automation with mode queued or parallel that routes many event types and contains delay:, wait_template: or wait_for_trigger: on some branches",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "mode: queued\nmax: 10\ntriggers:\n  - trigger: event\n    event_type: house_signal\nactions:\n  - choose:\n      - conditions: \"{{ trigger.event.data.kind == 'fan' }}\"\n        sequence:\n          - delay: {minutes: 5}\n          - action: fan.turn_off\n            target: {entity_id: \"{{ trigger.event.data.fan }}\"}\n      - conditions: \"{{ trigger.event.data.kind == 'alarm' }}\"\n        sequence:\n          - action: alarm_control_panel.alarm_arm_away\n            target: {entity_id: alarm_control_panel.house}",
+      "reason": "A burst of fan events holds every slot for five minutes. Run 11 is dropped with only a log warning ('Maximum number of runs exceeded'), so the alarm signal behind them never runs."
+    }
+  ],
+  "correct": [
+    {
+      "code": "      - conditions: \"{{ trigger.event.data.kind == 'fan' }}\"\n        sequence:\n          - action: script.turn_on\n            target: {entity_id: script.fan_delayed_off}\n            data:\n              variables: {fan: \"{{ trigger.event.data.fan }}\"}",
+      "reason": "Keep the dispatcher instant. script.turn_on starts the worker without waiting for it, so the wait lives in the worker (mode: parallel, or restart per device) and never holds the dispatcher's slots."
+    },
+    {
+      "code": "      - conditions: \"{{ trigger.event.data.kind == 'fan' }}\"\n        sequence:\n          - event: fan_wait_requested\n            event_data: {fan: \"{{ trigger.event.data.fan }}\"}",
+      "reason": "Or hand the wait to a worker automation through an event."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "A delay or wait inside a shared dispatcher that also carries safety or security events"
+  ],
+  "edge_notes": [
+    "The drop is silent apart from the warning, and max_exceeded: silent removes even that. Watch the automation's current attribute: sitting at max means it is dropping.",
+    "Raising max moves the cliff; it does not remove it.",
+    "Related: FG-37 (a deferred reload routed through a queued automation waits behind it).",
+    "Submitted by: Nathan Curtis, from a room dispatcher whose vent-fan waits could crowd out room signals and emergency arming, 2026-11-09."
+  ]
+}
+```
+
+---
+
+## FG-55 — device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id
+
+```json
+{
+  "id": "FG-55",
+  "title": "device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "2026.10",
+    "ha_risk_window": {
+      "start": "2026.10",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "device_attr(x, 'config_entries') or a device's config_entries read in a template",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{{ device_attr(dev, 'config_entries') | first }}",
+      "reason": "Deprecated. HA 2026.10 enforced the DeviceEntry.config_entries deprecation, and 2026.10.1 kept the template attribute working with a warning. HA 2026.11 logs: 'A template reads device attribute config_entries, which is deprecated and will stop working in Home Assistant 2027.10; use config_entry_id instead.' It works today and breaks at removal."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{{ device_attr(dev, 'config_entry_id') }}",
+      "reason": "Read the single-entry attribute."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "HA warns once per process, so a quiet log after the first warning does not mean every reader is fixed. Grep for it.",
+    "Code that must also run on cores older than config_entry_id can keep a version-gated fallback, and drop it when the supported floor passes that version.",
+    "The 2027.10 removal version comes from the HA 2026.11 log line captured on a test box; the release notes give no removal version. Confirm it, then set ha_risk_window.end with end_type hard_break.",
+    "Submitted by: Nathan Curtis, from the HA 2026.11.0 upgrade log on a ZenOS-AI test box, 2026-11-04. Deprecation start corrected to 2026.10 from release notes."
+  ]
+}
+```
+
+---
+
+## FG-56 — A Numeric Fallback That Is Also a Real Value
+
+```json
+{
+  "id": "FG-56",
+  "title": "A Numeric Fallback That Is Also a Real Value",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "int(0) or float(0) on a state whose 0 means something real (a presence count, a battery level, a door count), feeding a branch that acts on 0",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "- if: \"{{ states('zone.home') | int(0) == 0 }}\"\n  then:\n    - action: alarm_control_panel.alarm_arm_away\n      target: {entity_id: alarm_control_panel.house}",
+      "reason": "zone.home goes unknown during a restart or reload. int(0) turns 'unknown' into 0, which reads as an empty house, and the alarm arms away with people home."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{%- set n = states('zone.home') | int(-1) -%}\n{%- if n == 0 -%}arm{%- elif n > 0 -%}home{%- else -%}unknown: do nothing{%- endif -%}",
+      "reason": "Use a fallback that cannot be a real reading (-1 for a count), and give it its own do-nothing branch. Or guard first with has_value()."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "A security, safety or arming decision on a numeric state with a fallback equal to a value the decision acts on"
+  ],
+  "edge_notes": [
+    "Refines FG-04 and FG-20, which recommend int(0) as the fallback. That is right for display and arithmetic, and wrong wherever 0 drives an action.",
+    "Pair it with the trigger side (FG-43): ignore changes to and from unknown and unavailable as well.",
+    "Since HA 2026.7, zone state counts a person in every zone they are in (in_zones), so zone.home and zone.near_home can both count the same person. The 0 case still means nobody is in that zone.",
+    "Same principle for datetime fallbacks: a 1970 sentinel reads as 'very stale' (FG-41).",
+    "Submitted by: Nathan Curtis, from an auto-arm path that would read a lost presence count as an empty house, 2026-11-10."
+  ]
+}
+```
+
+---
+
+## FG-57 — Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11
+
+```json
+{
+  "id": "FG-57",
+  "title": "Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "2026.11",
+    "ha_risk_window": {
+      "start": "2026.11",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a sun.* trigger, or a calendar.event_started / calendar.event_ended trigger, with an offset and no offset_type",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "A sun.* or calendar.event_started trigger written in YAML before 2026.11 with a positive offset and no offset_type, meant to fire before the event.",
+      "reason": "Before 2026.11 these triggers defaulted to offset_type: before, so a positive offset fired before the event. HA 2026.11 (PR #184855): 'The sign of the offset now decides instead: negative fires before the event, positive fires after.' The config still loads, and the trigger now fires on the other side of the event. Nothing warns."
+    },
+    {
+      "code": "A model writing a new sun.* or calendar.event_* trigger with an offset and no offset_type.",
+      "reason": "The meaning of the offset depends on the HA version the user runs. Without offset_type the reader cannot tell which side was intended."
+    }
+  ],
+  "correct": [
+    {
+      "code": "Set offset_type explicitly on every sun.* and calendar.event_* trigger that has an offset.",
+      "reason": "The UI always writes offset_type, so UI-made triggers were not affected. Explicit offset_type means the same thing on every version."
+    },
+    {
+      "code": "When editing a YAML trigger of this kind on 2026.11+, if it has an offset and no offset_type: tell the user it changed direction in 2026.11 and ask which side they want, then flip the sign or add offset_type.",
+      "reason": "Release notes: 'If you wrote one of these triggers in YAML with an offset but without offset_type, flip the sign of the offset.'"
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Generating or leaving unflagged a sun.* or calendar.event_* trigger with an offset and no offset_type on HA 2026.11+"
+  ],
+  "edge_notes": [
+    "Scope: the release note names sun triggers written as sun.* and the calendar.event_started and calendar.event_ended triggers. It does not say whether the classic trigger: sun / trigger: calendar with event: and a signed offset are affected. Confirm before applying this FG to the classic form.",
+    "The release note gives no YAML example. Add exact wrong/correct YAML once checked against the trigger docs for 2026.11.",
+    "Silent on upgrade: the automation keeps loading and keeps firing, only at the wrong time. A sunset light that came on 30 minutes early now comes on 30 minutes late.",
+    "Source: HA 2026.11 release notes, Backward-incompatible changes, 'Calendar and Sun' (PR #184855)."
+  ]
+}
+```
+
+---
+
+## FG-58 — Matching on friendly_name Instead of entity_id or the Name Functions
+
+```json
+{
+  "id": "FG-58",
+  "title": "Matching on friendly_name Instead of entity_id or the Name Functions",
+  "status": "Candidate",
+  "severity": "soft_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "2026.11",
+    "ha_risk_window": {
+      "start": "2026.11",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "templates or conditions that compare, search or select on the friendly_name attribute (state_attr(x, 'friendly_name') ==, selectattr('attributes.friendly_name', ...), 'text' in friendly_name)",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{% if state_attr('switch.office_plug_1', 'friendly_name') == 'Office plug Socket 1' %}",
+      "reason": "HA 2026.11 changed how names are built and added child devices. Entity IDs do not change, but some friendly_name values do: a Tuya multi-channel 'Socket 1' becomes 'Channel 1 Socket'. The comparison silently turns false."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{% if is_state('switch.office_plug_1', 'on') %}",
+      "reason": "Identify entities by entity_id. It is stable across the naming change."
+    },
+    {
+      "code": "{{ entity_name('switch.office_plug_1') }} in {{ area_name('switch.office_plug_1') }}",
+      "reason": "For display, HA 2026.11 recommends entity_name(), device_name() and area_name() 'instead of the friendly_name attribute, which is going to be deprecated.'"
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [],
+  "edge_notes": [
+    "Release notes: 'Entity IDs, automations, and scripts are not affected.' The risk is only in templates that read or match the name text.",
+    "The old name stays as an alias and in friendly_name until the name is changed, but migration changes some names (Tuya multi-channel, Z-Wave endpoints that became child devices).",
+    "HA has said it plans to deprecate friendly_name and eventually remove it. No version is given yet; set ha_risk_window.end when one is announced.",
+    "Signatures of entity_name(), device_name() and area_name() are not shown in the release posts. Check the template-function pages before generating calls with arguments other than an entity_id.",
+    "Source: HA 2026.11 release notes ('Entity names') and the 2026-11-03 post 'Naming things in Home Assistant'."
+  ]
+}
+```
+
+---
+
+## FG-59 — Removed or Renamed Purpose-Specific Trigger and Condition Keys
+
+```json
+{
+  "id": "FG-59",
+  "title": "Removed or Renamed Purpose-Specific Trigger and Condition Keys",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.16-draft",
+    "added_ha": "2026.5",
+    "ha_risk_window": {
+      "start": "2026.5",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "a purpose-specific trigger or condition key removed or renamed in HA 2026.5–2026.7 (see renamed_keys), or the Labs option values any / last",
+    "scope": "yaml"
+  },
+  "renamed_keys": [
+    "2026.5 removed: person/device_tracker entered_home, left_home (triggers); is_home, is_not_home (conditions)",
+    "2026.6 Labs options: any -> each, last -> all (default now each)",
+    "2026.7: battery.low -> battery.became_low",
+    "2026.7: battery.not_low -> battery.no_longer_low",
+    "2026.7: lawn_mower.docked -> lawn_mower.returned_to_dock",
+    "2026.7: schedule.turned_off -> schedule.block_ended",
+    "2026.7: schedule.turned_on -> schedule.block_started",
+    "2026.7: timer.time_remaining -> timer.remaining_time_reached",
+    "2026.7: update.update_became_available -> update.became_available",
+    "2026.7: vacuum.docked -> vacuum.returned_to_dock",
+    "2026.7 conditions: climate.target_humidity -> climate.is_target_humidity",
+    "2026.7 conditions: climate.target_temperature -> climate.is_target_temperature"
+  ],
+  "wrong": [
+    {
+      "code": "- trigger: battery.low",
+      "reason": "Renamed to battery.became_low in HA 2026.7. Per the release notes, automations using the old keys 'will stop working until updated.'"
+    },
+    {
+      "code": "Person or device tracker entered_home / left_home triggers, or is_home / is_not_home conditions.",
+      "reason": "Removed in HA 2026.5."
+    }
+  ],
+  "correct": [
+    {
+      "code": "- trigger: battery.became_low",
+      "reason": "The current key."
+    },
+    {
+      "code": "triggers:\n  - trigger: state\n    entity_id: person.alex\n    to: home",
+      "reason": "When a purpose-specific key cannot be confirmed in the docs for the user's HA version, the generic state trigger and condition are stable. This is also the replacement the 2026.5 release notes give for entered_home and friends."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Generating a removed or renamed key listed in renamed_keys for an install on or after the version that changed it"
+  ],
+  "edge_notes": [
+    "The purpose-specific trigger and condition family moved fast: a Labs preview through 2026.6, default UI from 2026.7, with renames in each step. Model knowledge of these keys is very likely stale. Documentation is ground truth.",
+    "Unlike FG-23 (service: still loads), these old keys do not load at all, so severity is hard_fail.",
+    "Not yet included: HA 2026.10 made state conditions that combine for: with an attribute, a list of states, or another entity's state fail validation (2026.10.2 re-allowed the list case). Source was a page summary; verify and add here or as its own FG.",
+    "Source: HA 2026.5, 2026.6 and 2026.7 release notes, Backward-incompatible changes."
   ]
 }
 ```
@@ -2581,6 +3445,9 @@ For model consumption. Every field is present in every FG entry.
 - FG-36 — reload_all silent abort on config check failure *(Candidate)*
 - FG-38 — FileCabinet drawer .value type confusion *(Candidate)*
 - FG-40 — this reference in state: field of trigger-based template sensor *(Candidate)*
+- FG-54 — Long waits in a queued dispatcher drop triggers *(Candidate)*
+- FG-57 — Sun/calendar trigger offset without offset_type changed direction in 2026.11 *(Candidate)*
+- FG-59 — Removed or renamed purpose-specific trigger and condition keys *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
 
@@ -2592,10 +3459,20 @@ For model consumption. Every field is present in every FG entry.
 - FG-35 — automation.reload kills in-flight automations *(Candidate)*
 - FG-39 — Non-atomic destructive sequence *(Candidate)*
 
+## Type Safety Violations
+
+- FG-34 — variables: native type rendering crash *(Candidate)*
+- FG-41 — Date parsing without a failure plan *(Candidate)*
+- FG-42 — recorder.get_statistics statistics: wrapper *(Candidate)*
+- FG-46 — set inside a for loop does not survive the loop *(Candidate)*
+- FG-49 — '<entity_id>' in states is always false *(Candidate)*
+- FG-56 — Numeric fallback that is also a real value *(Candidate)*
+
 ## Persistence Violations (Data Safety)
 
 - FG-21 — Silent attribute persistence failure above 16,384 bytes *(Candidate)*
 - FG-26 — LLM output instruction echo / growth bomb *(Candidate)*
+- FG-53 — Lost update from concurrent read-modify-write *(Candidate)*
 
 Hard fail = zero score for that test.
 
@@ -2676,11 +3553,11 @@ Hard fail = zero score for that test. No partial credit.
 - All references tied to current HA documentation.
 - Corpus versioned by HA release.
 - Leaderboard entries must include HA version tested.
-- **Tested against: Home Assistant 2026.3.0**
+- **Tested against: Home Assistant 2026.11.1**
 - Quarterly review minimum.
 - Immediate update required when breaking changes are merged or announced.
 - Emergency FGs may be fast-tracked outside the quarterly cycle.
-- FG-03 hard break confirmed for 2026.6.
+- FG-03 hard break shipped in 2026.6 (legacy template syntax removed).
 
 ---
 
@@ -2698,7 +3575,7 @@ The bar is "safe and correct."
 
 ---
 
-*HALmark v0.9.15-draft*
+*HALmark v0.9.16-draft*
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
 *Spec Lead: Nathan Curtis | Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*

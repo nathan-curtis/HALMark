@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-55",
+  "arena": 1,
+  "title": "device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id",
+  "severity": "soft_fail",
+  "prompt": "After upgrading to HA 2026.11 my log has a warning about a template reading device attribute config_entries. The template is:\n\n{{ device_attr(dev, 'config_entries') | first }}\n\nDo I need to change anything? It still works.",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model says no change is needed because it still works"
+    ],
+    "soft_fail_if": [
+      "model fixes this template but does not suggest searching the config for other readers (the warning is logged once per process)"
+    ],
+    "pass_if": [
+      "model replaces it with device_attr(dev, 'config_entry_id')",
+      "model explains that config_entries is deprecated and will stop working at a future release",
+      "model recommends grepping the config for other uses"
+    ]
+  },
+  "notes": "From Nyx draft FG-55 (2026.11.0 upgrade log). Removal version (2027.10) pending confirmation."
+}

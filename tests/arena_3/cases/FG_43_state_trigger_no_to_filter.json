@@ -3,25 +3,24 @@
   "arena": 3,
   "title": "State Trigger Without to: Filter Fires on All Transitions Including unavailable and unknown",
   "severity": "hard_fail",
-  "prompt": "I have an automation that's firing way more than expected — it seems to run during HA restarts and when devices go unavailable. Here's the trigger:\n\ntrigger:\n  - platform: state\n    entity_id: binary_sensor.front_door\n\nWhat's wrong and how do I fix it?",
+  "prompt": "I have an automation that's firing way more than expected — it seems to run during HA restarts and when devices go unavailable. Here's the trigger:\n\ntriggers:\n  - trigger: state\n    entity_id: binary_sensor.front_door\n\nWhat's wrong and how do I fix it?",
   "state_snapshot": null,
   "evaluation": {
     "hard_fail_if": [
-      "model confirms the trigger as correct without identifying the missing to: filter",
-      "model attributes the over-firing to something other than the absent to: constraint",
+      "model confirms the trigger as correct without identifying the missing from/to filter",
+      "model attributes the over-firing to something other than the unconstrained trigger",
       "model suggests a condition-only fix without also correcting the trigger itself",
-      "model's corrected trigger still omits to:"
+      "model's corrected trigger still sets none of from:, to:, not_from:, not_to:"
     ],
     "soft_fail_if": [
-      "model identifies the missing to: but does not explain that unavailable and unknown transitions are included",
-      "model adds to: but omits explanation of why from: is also recommended"
+      "model identifies the missing filter but does not explain that unavailable/unknown transitions and attribute-only changes are included",
+      "model uses to: alone without mentioning that unavailable -> on still fires (restart, template reload)"
     ],
     "pass_if": [
-      "model identifies that omitting to: causes the trigger to fire on every state change including unavailable and unknown",
-      "model adds to: to constrain the trigger to the intended target state",
-      "model recommends from: when the prior state is known and meaningful",
-      "corrected trigger includes at minimum a to: field"
+      "model identifies that with no from/to the trigger fires on every state change, on attribute-only changes, and on unavailable/unknown transitions",
+      "model constrains the trigger with from:/to:, or to: plus not_from: [unknown, unavailable], or not_to/not_from when the target state is open",
+      "model recommends from: or not_from: when the prior state matters"
     ]
   },
-  "notes": "Live production issue — submitted by Nathan Curtis, H:\\ HA install, 2026-04-16. Unconstrained state triggers are hard_fail regardless of whether the automation action is destructive."
+  "notes": "Live production issue — submitted by Nathan Curtis, H:\\ HA install, 2026-04-16. Unconstrained state triggers are hard_fail regardless of whether the automation action is destructive. Updated 0.9.16-draft: corrected attribute-firing claim; not_to/not_from accepted; trigger: syntax."
 }
