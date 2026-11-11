@@ -2503,6 +2503,86 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
+## FG-41 — Date Parsing Without a Failure Plan: as_datetime Fails Silent, strptime Fails Loud
+
+```json
+{
+  "id": "FG-41",
+  "title": "Date Parsing Without a Failure Plan: as_datetime Fails Silent, strptime Fails Loud",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "type_safety",
+  "versions": {
+    "added_halmark": "0.9.15-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Merged Nyx draft FG-47 (strptime without default); retitled; added sentinel and 'None'-string notes. Correct form simplified to as_datetime(raw, none) after T5; strptime kept for non-ISO formats."
+      }
+    ],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "as_datetime chained to as_timestamp or any further filter without | default(none, true) interposed; input passes existence guards (is not none, trim != '', != 'None') but is not ISO 8601 parseable; or strptime(x, fmt) with no default argument on caller-supplied text",
+    "scope": "jinja"
+  },
+  "wrong": [
+    {
+      "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {{ (now().timestamp() - (_val | as_datetime | as_timestamp)) / 60 }}\n{%- endif -%}",
+      "reason": "as_datetime returns None silently for non-ISO input — it does not throw. The existence guard fires on the input string, not on the output of as_datetime. as_timestamp then receives None and throws: ValueError: Template error: as_timestamp got invalid input 'None'."
+    },
+    {
+      "code": "{% set dt = as_datetime(raw) if 'T' in raw else strptime(raw, '%Y-%m-%d') %}",
+      "reason": "'2026-10-29 18:00:00' has no 'T', goes to the date-only strptime and raises: 'strptime got invalid input ... but no default was specified'. The call fails instead of parsing an ordinary datetime. The routing is also unnecessary: as_datetime parses all three shapes."
+    }
+  ],
+  "correct": [
+    {
+      "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {%- set _parsed = _val | as_datetime | default(none, true) -%}\n  {%- if _parsed is not none -%}\n    {{ (now().timestamp() - (_parsed | as_timestamp)) / 60 }}\n  {%- else -%}\n    {{ fallback_value }}\n  {%- endif -%}\n{%- endif -%}",
+      "reason": "| default(none, true) after as_datetime catches the silent None before it reaches any downstream filter. The true parameter is required — without it, default() only catches Undefined, not None. Guard on _parsed before as_timestamp."
+    },
+    {
+      "code": "{% set dt = as_datetime(raw, none) %}\n{% if dt is none %}\n  {{ fallback_value }}\n{% else %}\n  {{ (now() - (dt | as_local)).total_seconds() }}\n{% endif %}",
+      "reason": "One call handles date-only ('2026-10-29'), space-separated and T-separated input (tested on HA 2026.11.0). The default turns bad text into none, which is checked before use. as_local makes a naive result comparable with now()."
+    },
+    {
+      "code": "{% set dt = strptime(raw, '%d/%m/%Y %H:%M', none) %}",
+      "reason": "Use strptime only for formats as_datetime does not parse, and always give it a default: without one it raises on any input that does not match the format exactly."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "as_datetime chained directly to as_timestamp (or any further filter) without | default(none, true) interposed",
+    "existence check (is not none, trim != '') applied to the input string rather than to the result of as_datetime",
+    "strptime on caller-supplied or LLM-supplied text with no default argument"
+  ],
+  "edge_notes": [
+    "as_datetime returns None for text it cannot parse, including time-only strings ('21:17:19') and timestamp-like strings that fail to convert. It does not log or warn. Non-text invalid input (for example None) raises instead (HA docs: template-functions/as_datetime and templating/errors).",
+    "The failure is silent at parse time and passes HA config check. It only surfaces at runtime when a bad value flows through the template.",
+    "| default(none, true) vs | default(none): the true parameter enables boolean=True behavior — catches falsy values including None. Without it, default() only catches Undefined.",
+    "The canonical rule: after as_datetime, always | default(none, true) before any further filter chain. Never assume a non-empty input string produces a non-None datetime.",
+    "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112.",
+    "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
+    "as_datetime takes a default argument: as_datetime(x, none) is shorter than | default(none, true) (HA docs: as_datetime(value, default)). The docs do not say which HA version added default.",
+    "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11; the docs show only the space-separated form). Do not route by separator; use as_datetime(raw, none).",
+    "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
+    "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
+    "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
+    "as_datetime returns a naive datetime for text without an offset, and subtracting a naive datetime from now() (which is aware) raises. Pipe through as_local first. as_local treats a naive datetime as local time in the HA time zone, not UTC (HA docs: template-functions/as_local).",
+    "strptime: 'If you leave out default and the text can't be parsed, strptime raises an error and the template fails.' The format must match the input exactly (HA docs: template-functions/strptime).",
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None."
+  ]
+}
+```
+
+---
+
 ## FG-42 — recorder.get_statistics Response Wrapped Under statistics: Key
 
 ```json
@@ -2617,86 +2697,6 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "The same minimum-surface principle extends to other over-broad patterns: event triggers without event_data: filters, state triggers watching unnecessarily wide entity_id lists, and triggers without for: debounce where contact bounce is expected.",
     "Examples use the current trigger: key. platform: still loads but is the legacy form.",
     "Submitted by: Nathan Curtis — source: live H:\\ HA install, 2026-04-16. Correction from Nyx, 2026-11-10."
-  ]
-}
-```
-
----
-
-## FG-41 — Date Parsing Without a Failure Plan: as_datetime Fails Silent, strptime Fails Loud
-
-```json
-{
-  "id": "FG-41",
-  "title": "Date Parsing Without a Failure Plan: as_datetime Fails Silent, strptime Fails Loud",
-  "status": "Candidate",
-  "severity": "hard_fail",
-  "category": "type_safety",
-  "versions": {
-    "added_halmark": "0.9.15-draft",
-    "added_ha": "all",
-    "ha_risk_window": {
-      "start": "all",
-      "end": null,
-      "end_type": null
-    },
-    "modified": [
-      {
-        "halmark": "0.9.16-draft",
-        "change": "Merged Nyx draft FG-47 (strptime without default); retitled; added sentinel and 'None'-string notes. Correct form simplified to as_datetime(raw, none) after T5; strptime kept for non-ISO formats."
-      }
-    ],
-    "emergency": false
-  },
-  "detection": {
-    "pattern": "as_datetime chained to as_timestamp or any further filter without | default(none, true) interposed; input passes existence guards (is not none, trim != '', != 'None') but is not ISO 8601 parseable; or strptime(x, fmt) with no default argument on caller-supplied text",
-    "scope": "jinja"
-  },
-  "wrong": [
-    {
-      "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {{ (now().timestamp() - (_val | as_datetime | as_timestamp)) / 60 }}\n{%- endif -%}",
-      "reason": "as_datetime returns None silently for non-ISO input — it does not throw. The existence guard fires on the input string, not on the output of as_datetime. as_timestamp then receives None and throws: ValueError: Template error: as_timestamp got invalid input 'None'."
-    },
-    {
-      "code": "{% set dt = as_datetime(raw) if 'T' in raw else strptime(raw, '%Y-%m-%d') %}",
-      "reason": "'2026-10-29 18:00:00' has no 'T', goes to the date-only strptime and raises: 'strptime got invalid input ... but no default was specified'. The call fails instead of parsing an ordinary datetime. The routing is also unnecessary: as_datetime parses all three shapes."
-    }
-  ],
-  "correct": [
-    {
-      "code": "{%- if _val is not none and _val | trim != '' and _val != 'None' -%}\n  {%- set _parsed = _val | as_datetime | default(none, true) -%}\n  {%- if _parsed is not none -%}\n    {{ (now().timestamp() - (_parsed | as_timestamp)) / 60 }}\n  {%- else -%}\n    {{ fallback_value }}\n  {%- endif -%}\n{%- endif -%}",
-      "reason": "| default(none, true) after as_datetime catches the silent None before it reaches any downstream filter. The true parameter is required — without it, default() only catches Undefined, not None. Guard on _parsed before as_timestamp."
-    },
-    {
-      "code": "{% set dt = as_datetime(raw, none) %}\n{% if dt is none %}\n  {{ fallback_value }}\n{% else %}\n  {{ (now() - (dt | as_local)).total_seconds() }}\n{% endif %}",
-      "reason": "One call handles date-only ('2026-10-29'), space-separated and T-separated input (tested on HA 2026.11.0). The default turns bad text into none, which is checked before use. as_local makes a naive result comparable with now()."
-    },
-    {
-      "code": "{% set dt = strptime(raw, '%d/%m/%Y %H:%M', none) %}",
-      "reason": "Use strptime only for formats as_datetime does not parse, and always give it a default: without one it raises on any input that does not match the format exactly."
-    }
-  ],
-  "deference_required": false,
-  "hard_fail_triggers": [
-    "as_datetime chained directly to as_timestamp (or any further filter) without | default(none, true) interposed",
-    "existence check (is not none, trim != '') applied to the input string rather than to the result of as_datetime",
-    "strptime on caller-supplied or LLM-supplied text with no default argument"
-  ],
-  "edge_notes": [
-    "as_datetime returns None for text it cannot parse, including time-only strings ('21:17:19') and timestamp-like strings that fail to convert. It does not log or warn. Non-text invalid input (for example None) raises instead (HA docs: template-functions/as_datetime and templating/errors).",
-    "The failure is silent at parse time and passes HA config check. It only surfaces at runtime when a bad value flows through the template.",
-    "| default(none, true) vs | default(none): the true parameter enables boolean=True behavior — catches falsy values including None. Without it, default() only catches Undefined.",
-    "The canonical rule: after as_datetime, always | default(none, true) before any further filter chain. Never assume a non-empty input string produces a non-None datetime.",
-    "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112.",
-    "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
-    "as_datetime takes a default argument: as_datetime(x, none) is shorter than | default(none, true) (HA docs: as_datetime(value, default)). The docs do not say which HA version added default.",
-    "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11; the docs show only the space-separated form). Do not route by separator; use as_datetime(raw, none).",
-    "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
-    "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
-    "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
-    "as_datetime returns a naive datetime for text without an offset, and subtracting a naive datetime from now() (which is aware) raises. Pipe through as_local first. as_local treats a naive datetime as local time in the HA time zone, not UTC (HA docs: template-functions/as_local).",
-    "strptime: 'If you leave out default and the text can't be parsed, strptime raises an error and the template fails.' The format must match the input exactly (HA docs: template-functions/strptime).",
-    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None."
   ]
 }
 ```
