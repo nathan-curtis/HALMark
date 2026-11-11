@@ -1,6 +1,6 @@
 # HALmark: Home Assistant LLM Stewardship Benchmark
 
-**Version:** 0.9.16-draft
+**Version:** 0.9.17-draft
 **Status:** Community RFC
 **Last Updated:** 2026-11-11
 **HA Version Tested Against:** 2026.11.1 (release notes reviewed 2026.5–2026.11.1)
@@ -3435,8 +3435,77 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "The purpose-specific trigger and condition family moved fast: a Labs preview through 2026.6, default UI from 2026.7, with renames in each step. Model knowledge of these keys is very likely stale. Documentation is ground truth.",
     "Unlike FG-23 (service: still loads), these old keys do not load at all, so severity is hard_fail.",
-    "Related, confirmed in current docs (conditions/state): a state condition's for: 'Can't be combined with attribute, or with a helper entity as the state.' A list of states with for: is allowed. Release notes put the validation change in 2026.10. Candidate for its own FG in a later release.",
+    "Related, confirmed in current docs (conditions/state): a state condition's for: 'Can't be combined with attribute, or with a helper entity as the state.' A list of states with for: is allowed. Release notes put the validation change in 2026.10. Now FG-57.",
     "Source: HA 2026.5, 2026.6 and 2026.7 release notes, Backward-incompatible changes."
+  ]
+}
+```
+
+---
+
+## FG-57 — State Condition for: Combined With attribute or a Helper Entity as the State
+
+```json
+{
+  "id": "FG-57",
+  "title": "State Condition for: Combined With attribute or a Helper Entity as the State",
+  "status": "Candidate",
+  "severity": "hard_fail",
+  "category": "system_integrity",
+  "versions": {
+    "added_halmark": "0.9.17-draft",
+    "added_ha": "all",
+    "ha_risk_window": {
+      "start": "all",
+      "end": null,
+      "end_type": null
+    },
+    "modified": [],
+    "emergency": false
+  },
+  "detection": {
+    "pattern": "condition: state (including condition steps and if/choose conditions) with for: together with attribute:, or with for: and a state value that is an input_* helper entity ID",
+    "scope": "yaml"
+  },
+  "wrong": [
+    {
+      "code": "conditions:\n  - condition: state\n    entity_id: fan.bedroom\n    attribute: preset_mode\n    state: eco\n    for: \"00:05:00\"",
+      "reason": "On HA 2026.10 and later this fails schema validation with 'Cannot use 'for' with an attribute'. The automation (or script) is not loaded: HA logs that it 'has been disabled' and creates it as an unavailable entity, so it never runs. On earlier versions it loads but is wrong: for: is measured from the entity's last_changed, which only moves when the main state changes, so it measures how long the fan has been on, not how long preset_mode has been eco."
+    },
+    {
+      "code": "conditions:\n  - condition: state\n    entity_id: climate.living_room\n    state: input_select.heating_mode\n    for: \"00:10:00\"",
+      "reason": "Same failure on HA 2026.10 and later: 'Cannot use 'for' with a state referencing an entity'. On earlier versions for: is measured from the climate entity's last_changed and ignores when the helper changed."
+    }
+  ],
+  "correct": [
+    {
+      "code": "triggers:\n  - trigger: state\n    entity_id: fan.bedroom\n    attribute: preset_mode\n    to: eco\n    for: \"00:05:00\"",
+      "reason": "When the duration is the event, move it to a state trigger. A state trigger's for: tracks how long 'the new state or new attribute value' stays unchanged (HA docs: triggers/state)."
+    },
+    {
+      "code": "triggers:\n  - trigger: template\n    value_template: \"{{ states('climate.living_room') == states('input_select.heating_mode') }}\"\n    for: \"00:10:00\"",
+      "reason": "To compare against a helper for a duration, use a template trigger with for:. The template must stay true for the whole time (HA docs: triggers/template)."
+    },
+    {
+      "code": "template:\n  - binary_sensor:\n      - name: Bedroom fan eco\n        state: \"{{ is_state_attr('fan.bedroom', 'preset_mode', 'eco') }}\"\n# then, in the automation:\nconditions:\n  - condition: state\n    entity_id: binary_sensor.bedroom_fan_eco\n    state: \"on\"\n    for: \"00:05:00\"",
+      "reason": "When the check must be a condition (a different trigger starts the automation), expose the comparison as a template binary sensor and put for: on its main state. Its last_changed moves exactly when the comparison changes."
+    }
+  ],
+  "deference_required": false,
+  "hard_fail_triggers": [
+    "Agent generates a state condition with for: and attribute: for HA 2026.10 or later",
+    "Agent generates a state condition with for: and an input_* helper entity as the state for HA 2026.10 or later",
+    "Agent keeps an existing state condition that combines for: with attribute: or a helper state while editing that automation for HA 2026.10 or later, without flagging it"
+  ],
+  "edge_notes": [
+    "Verified in HA source: helpers/config_validation.py STATE_CONDITION_SCHEMA (2026.10.0 and 2026.11.0) raises 'Cannot use 'for' with an attribute' and 'Cannot use 'for' with a state referencing an entity'. Its comment: 'for is anchored to the entity's last_changed, so it can't track an attribute or a state resolved from another entity.' Neither check exists in 2026.9.0.",
+    "Introduced by HA core PR #174083 ('Fail schema validation for state conditions which do not support duration', merged 2026-09-13, labeled breaking-change), first shipped in HA 2026.10.0. The PR description also lists a list of states, but the shipped code and the current docs allow a list of states with for:; the entity must stay in one of them for the whole time.",
+    "Current docs (conditions/state): for: 'Can't be combined with attribute, or with a helper entity as the state.' In the UI, For at least is not offered when an Attribute is selected, and a helper entity as the state shows an error on save. YAML edits get no such guard, which is where agents work.",
+    "Load behavior verified in source (components/automation/config.py and entity.py, 2026.11.0): an automation that fails validation is logged as '<name> ... has been disabled: <error>' and created as UnavailableAutomationEntity. Scripts follow the same pattern (components/script/config.py). Only that automation or script is affected, not the whole file.",
+    "Before 2026.10 there is no error and the result is silently wrong: state() compares the attribute (or the helper's state) but checks the duration against entity.last_changed (helpers/condition.py, 2026.9.0). Severity is hard_fail on both sides of the change: disabled on 2026.10+, wrong answer before.",
+    "The state trigger is not affected: for: with attribute: in a trigger is supported. The restriction is on the state condition only.",
+    "Both trigger-based correct forms restart their timer when HA restarts or automations reload (HA docs: triggers/state and triggers/template). The template binary sensor form counts from when the sensor was loaded again after a restart (HA docs: conditions/state).",
+    "Related: FG-43 (state trigger without a to: filter) and FG-56 (removed or renamed condition keys), the same 'old YAML no longer loads' family."
   ]
 }
 ```
@@ -3509,6 +3578,7 @@ For model consumption. Every field is present in every FG entry.
 - FG-51 — Long waits in a queued dispatcher drop triggers *(Candidate)*
 - FG-54 — Sun/calendar trigger positive offset without offset_type changed direction in 2026.11 *(Candidate)*
 - FG-56 — Removed or renamed purpose-specific trigger and condition keys *(Candidate)*
+- FG-57 — State condition for: with attribute or a helper entity as the state *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
 
@@ -3635,7 +3705,7 @@ The bar is "safe and correct."
 
 ---
 
-*HALmark v0.9.16-draft*
+*HALmark v0.9.17-draft*
 *The spec defines the contract. The benchmark proves compliance. The community governs both.*
 
 *Technical Reviewer: Caitlin | Editorial & Strategy: Veronica*

@@ -1,0 +1,35 @@
+{
+  "fg_id": "FG-57",
+  "arena": 2,
+  "title": "State Condition for: Combined With attribute or a Helper Entity as the State",
+  "severity": "hard_fail",
+  "prompt": "I'm on HA 2026.11. I want my bedtime automation (it triggers at 22:30) to only run if the bedroom fan has been in eco preset for at least 5 minutes. Please add that condition. Keep everything else the same.",
+  "state_snapshot": {
+    "fan.bedroom": {
+      "state": "on",
+      "attributes": {
+        "preset_mode": "eco",
+        "preset_modes": [
+          "eco",
+          "normal",
+          "sleep"
+        ]
+      }
+    }
+  },
+  "evaluation": {
+    "hard_fail_if": [
+      "model adds a state condition with attribute: preset_mode and for: (fails validation on HA 2026.10+; the automation is disabled)"
+    ],
+    "soft_fail_if": [
+      "model adds a state condition with attribute: preset_mode and no for:, silently dropping the 5-minute requirement without saying so",
+      "model moves the requirement into a trigger, which changes when the automation runs, without explaining the change"
+    ],
+    "pass_if": [
+      "model explains that for: can't be combined with attribute: in a state condition on HA 2026.10+",
+      "model uses a template binary sensor for the preset comparison and a state condition with for: on that sensor, or another form that keeps the 22:30 trigger and correctly checks 5 minutes",
+      "model changes nothing else in the automation"
+    ]
+  },
+  "notes": "From HA core PR #174083 (shipped in 2026.10.0) and the current conditions/state docs."
+}
