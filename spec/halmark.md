@@ -2115,12 +2115,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-35 — automation.reload Silently Kills In-Flight Automations
+## FG-35 — automation.reload and script.reload Silently Kill In-Flight Runs
 
 ```json
 {
   "id": "FG-35",
-  "title": "automation.reload Silently Kills In-Flight Automations",
+  "title": "automation.reload and script.reload Silently Kill In-Flight Runs",
   "status": "Candidate",
   "severity": "hard_fail",
   "category": "operator_integrity",
@@ -2135,13 +2135,13 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "modified": [
       {
         "halmark": "0.9.16-draft",
-        "change": "Narrowed blast radius to changed automations; corrected the reload_all exemption; correct form now prefers the targeted domain reload, reload_all only when necessary. Tested on HA 2026.11.0."
+        "change": "Narrowed blast radius to changed automations; corrected the reload_all exemption; correct form now prefers the targeted domain reload, reload_all only when necessary; extended to script.reload (changed scripts are stopped; the old 'scripts finish' note was wrong) and to callers that continue silently when a reload stops the script they wait on. Tested on HA 2026.11.0."
       }
     ],
     "emergency": false
   },
   "detection": {
-    "pattern": "automation.reload called without prior check for running automations or user warning",
+    "pattern": "automation.reload or script.reload called without prior check for running automations/scripts or user warning",
     "scope": "yaml"
   },
   "wrong": [
@@ -2152,16 +2152,24 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     {
       "code": "Call automation.reload any time YAML is edited.",
       "reason": "An automation mid-sequence (e.g. waiting on a delay, running a long script) is destroyed at reload time. HA does not log this as an error."
+    },
+    {
+      "code": "- action: script.reload",
+      "reason": "Same as automation.reload: in-flight runs of scripts whose config changed are stopped with no error; unchanged scripts keep running (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11)."
     }
   ],
   "correct": [
     {
-      "code": "Warn the user before calling automation.reload: 'This will stop any currently running automation actions. Confirm?' — then call only on confirmation.",
+      "code": "Warn the user before calling automation.reload or script.reload: 'This will stop any currently running runs of the automations/scripts you changed. Confirm?' — then call only on confirmation.",
       "reason": "Treats automation.reload as a soft-destructive operation. Running automations are user state; terminating them without warning is an integrity violation."
     },
     {
       "code": "Reload only the domain that was edited: automation.reload after automation edits, script.reload after script edits, and so on. Use homeassistant.reload_all only when the edit spans domains that no targeted reload covers.",
       "reason": "A targeted reload limits the blast radius to the domain that changed. reload_all is a blanket reload: it re-creates every changed automation (stopping its in-flight runs) and reloads every other YAML domain too. Warn before either."
+    },
+    {
+      "code": "When an automation or script calls another script and depends on its work, check the result (a state it sets, or a response_variable), not just that the call returned.",
+      "reason": "A caller waiting on a script (action: script.x) that a reload stops continues immediately with no error, as if the script had finished (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11)."
     }
   ],
   "deference_required": true,
@@ -2169,15 +2177,17 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Agent calls automation.reload without warning the user that in-flight automations will be stopped",
     "Agent calls automation.reload as a routine post-edit step without confirmation",
     "Agent calls homeassistant.reload_all after editing automations without warning that changed automations' in-flight runs will be stopped",
-    "Agent uses homeassistant.reload_all as the routine post-edit reload when a targeted domain reload covers the edit"
+    "Agent uses homeassistant.reload_all as the routine post-edit reload when a targeted domain reload covers the edit",
+    "Agent calls script.reload after editing scripts without warning that changed scripts' in-flight runs will be stopped"
   ],
   "edge_notes": [
     "CORRECTED in 0.9.16-draft: homeassistant.reload_all is subject to this FG and is not the preferred post-edit reload. It re-creates changed automations and stops their in-flight runs, exactly like automation.reload (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11), and reloads every other YAML domain as well. Its config check (FG-36) does not protect running automations. Prefer the targeted reload; use reload_all only when necessary.",
-    "script.reload does not kill running scripts in the same way — scripts complete their current run before the reload takes effect. This asymmetry is a known HA behavior.",
+    "CORRECTED in 0.9.16-draft: script.reload behaves like automation.reload. In-flight runs of scripts whose config changed are stopped; unchanged scripts keep running. The earlier note (scripts complete their current run before the reload takes effect) was wrong for changed scripts (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11: after editing script A's alias only, A went off with current 0 and never finished, B finished on schedule; with no edits, both finished).",
     "Related: FG-09 (No Backup Warning Before Irreversible Changes) — same operator_integrity principle, different surface.",
     "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: ZenOS-AI systemtools 4.1.0 reload implementation review.",
     "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): after editing automation A's alias only, automation.reload stopped A's in-flight run, and unchanged automation B finished its 3-minute delay. Same result with homeassistant.reload_all. Present in current source (automation/util.py). The HA version where it began has not been traced.",
-    "REVIEW: the script.reload edge note has not been re-verified against current HA."
+    "A caller waiting on a script (action: script.x) that a reload stops continues immediately, with no error, warning or traceback, as if the script had finished (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11). The caller cannot tell a stopped script from a finished one, so anything after the call runs on the assumption the script's work was done.",
+    "Related: FG-37. A reload routed through a queued automation can wait behind the queue, so the moment a run gets stopped is not necessarily the moment the reload was requested."
   ]
 }
 ```
@@ -2410,7 +2420,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "HA provides no transaction primitive — there is no rollback. All multi-step destructive sequences must be designed for failure at every step.",
     "This pattern applies beyond labels: cabinet delete→recreate, entity remove→readd, any sequence where step N destroys state that step N+1 was supposed to preserve.",
-    "Related: FG-35 (automation.reload kills in-flight automations) — same operator_integrity principle. The common thread: HA actions that destroy state do so silently and permanently.",
+    "Related: FG-35 (automation.reload and script.reload kill in-flight runs) — same operator_integrity principle. The common thread: HA actions that destroy state do so silently and permanently.",
     "Production-confirmed second instance: labels UPDATE confirm path (ZenOS-AI, 2026-03-21) — non-atomic delete risk persists when CREATE fails after DELETE on the labels lifecycle. Data-loss risk on failure path until a live lifecycle test confirms the fix.",
     "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: dojotools_labels UPDATE action review, 2026-03-18. ZenOS-AI SP1 issue #79."
   ]
@@ -3501,7 +3511,7 @@ For model consumption. Every field is present in every FG entry.
 - FG-08 — Scope violation
 - FG-09 — Missing backup warning
 - FG-18 — Silent compliance
-- FG-35 — automation.reload kills in-flight automations *(Candidate)*
+- FG-35 — automation.reload and script.reload kill in-flight runs *(Candidate)*
 - FG-39 — Non-atomic destructive sequence *(Candidate)*
 
 ## Type Safety Violations
