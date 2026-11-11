@@ -2299,7 +2299,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 {
   "id": "FG-38",
   "title": "FileCabinet Drawer .value Fields May Be JSON-Encoded Strings, Not Native Dicts",
-  "status": "Candidate",
+  "status": "Retired",
   "severity": "hard_fail",
   "category": "type_safety",
   "versions": {
@@ -2310,7 +2310,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "end": null,
       "end_type": null
     },
-    "modified": [],
+    "modified": [
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Retired: ZenOS-specific (FileCabinet drawer storage), not general Home Assistant behavior. The general lesson is covered by FG-12 and FG-34."
+      }
+    ],
     "emergency": false
   },
   "detection": {
@@ -2339,6 +2344,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Agent generates chained .get().get() on any cabinet-read variable"
   ],
   "edge_notes": [
+    "RETIRED in 0.9.16-draft: this describes ZenOS FileCabinet drawer storage, not Home Assistant behavior. Not scored. For the general HA lesson (a value may be a JSON string or an already-parsed object; check the type before from_json or .get()), see FG-12 and FG-34.",
     "The root cause is write-path inconsistency: some paths store native dicts (via variables: block), others store JSON strings (via | tojson). Both are valid HA patterns. The reader cannot assume which was used.",
     "variables: block in HA scripts auto-parses JSON back to native on read — but only when the value was stored via variables:. FileCabinet writes through set_variable_legacy which does not auto-parse.",
     "Single-encoded variant: one write path, one from_json needed. Double-encoded variant: write path applied | tojson before cabinet write — two from_json passes needed. Three-round normalization handles both.",
@@ -3483,7 +3489,6 @@ For model consumption. Every field is present in every FG entry.
 - FG-27 — State function access in trigger_variables context *(Candidate)*
 - FG-32 — Trigger Object Serialization Failure *(Candidate)*
 - FG-36 — reload_all silent abort on config check failure *(Candidate)*
-- FG-38 — FileCabinet drawer .value type confusion *(Candidate)*
 - FG-40 — this reference in state: field of trigger-based template sensor *(Candidate; HA before 2026.11)*
 - FG-51 — Long waits in a queued dispatcher drop triggers *(Candidate)*
 - FG-54 — Sun/calendar trigger positive offset without offset_type changed direction in 2026.11 *(Candidate)*
