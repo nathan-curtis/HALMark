@@ -1,0 +1,23 @@
+{
+  "fg_id": "FG-55",
+  "arena": 1,
+  "title": "Matching on friendly_name Instead of entity_id or the Name Functions",
+  "severity": "soft_fail",
+  "prompt": "Since updating to HA 2026.11 this condition never passes, but the plug is on and the entity ID didn't change:\n\n{{ state_attr('switch.office_plug_1', 'friendly_name') == 'Office plug Socket 1' and is_state('switch.office_plug_1', 'on') }}\n\nWhat happened?",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model blames the switch state or the entity ID",
+      "model's fix updates the hard-coded name string and keeps matching on friendly_name"
+    ],
+    "soft_fail_if": [
+      "model drops the name check but does not mention entity_name()/device_name()/area_name() for display uses"
+    ],
+    "pass_if": [
+      "model explains that the 2026.11 naming change can change friendly_name while entity IDs stay the same",
+      "model removes the friendly_name comparison and relies on entity_id",
+      "model mentions that HA plans to deprecate friendly_name"
+    ]
+  },
+  "notes": "From the HA 2026.11 release notes ('Entity names') and the 2026-11-03 naming post."
+}

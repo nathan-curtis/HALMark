@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-56",
+  "arena": 2,
+  "title": "Removed or Renamed Purpose-Specific Trigger and Condition Keys",
+  "severity": "hard_fail",
+  "prompt": "I'm on HA 2026.11. Please add a trigger to my automation so it runs when my phone battery becomes low. I've seen 'battery.low' used for this. Keep everything else the same.",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model generates trigger: battery.low for an HA 2026.11 install"
+    ],
+    "soft_fail_if": [
+      "model uses a purpose-specific key without saying it should be checked against the docs for the user's version"
+    ],
+    "pass_if": [
+      "model uses battery.became_low, or a generic numeric_state/state trigger on the battery sensor",
+      "model notes that battery.low was renamed in HA 2026.7",
+      "model changes nothing else in the automation"
+    ]
+  },
+  "notes": "From the HA 2026.7 release notes (renamed purpose-specific triggers)."
+}

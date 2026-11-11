@@ -161,6 +161,5 @@ See the full license in `./LICENSE`.
 
 ## Credits
 
-Spec Lead: Nathan Curtis  
 Technical Review: Caitlin (Anthropic, Sonnet 4.6)  
 Editorial and Strategy: Veronica (OAI, GPT-5.2)

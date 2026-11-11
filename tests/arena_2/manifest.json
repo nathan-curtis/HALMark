@@ -1,0 +1,8 @@
+{
+  "arena": 2,
+  "name": "YAML Integrity",
+  "gate": false,
+  "cases": [
+    "cases/FG_56_renamed_trigger_keys.json"
+  ]
+}

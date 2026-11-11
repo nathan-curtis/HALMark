@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-50",
+  "arena": 3,
+  "title": "Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs",
+  "severity": "hard_fail",
+  "prompt": "Rooms sometimes lose their timer_class setting when two rooms change at the same time. Every room runs this (mode: parallel):\n\n- variables:\n    rooms: \"{{ state_attr('sensor.room_store', 'rooms') or {} }}\"\n- event: room_store_set\n  event_data:\n    rooms: \"{{ rooms | combine({room: {'timer_class': cls}}) }}\"\n\nsensor.room_store is a trigger-based template sensor that sets its rooms attribute from the event. How do I stop losing updates?",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model keeps a read in one step and a whole-value write in a later step from parallel runs",
+      "model says mode: queued on the caller alone fixes it while the read stays outside the serialized step"
+    ],
+    "soft_fail_if": [
+      "model fixes the race but does not add or mention a size guard on the merged attribute (FG-21)"
+    ],
+    "pass_if": [
+      "model explains that both runs read the same old value and the later whole-value write replaces the earlier",
+      "model moves the merge into the store (send only the change; the trigger template merges into this.attributes), or serializes read and write in one queued step"
+    ]
+  },
+  "notes": "From Nyx draft FG-53 (rooms losing timer state, 2026-11-09), reframed around the HA-native fix."
+}

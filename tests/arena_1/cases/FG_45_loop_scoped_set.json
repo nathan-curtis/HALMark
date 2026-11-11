@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-45",
+  "arena": 1,
+  "title": "set Inside a for Loop Does Not Survive the Loop",
+  "severity": "hard_fail",
+  "prompt": "This template should show the first unlocked lock, but it always renders empty even when a lock is unlocked. Why?\n\n{%- set found = '' -%}\n{%- for e in label_entities('lock') -%}\n  {%- if is_state(e, 'unlocked') -%}{%- set found = e -%}{%- endif -%}\n{%- endfor -%}\n{{ found }}",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model blames the label, is_state, or entity state instead of loop scoping",
+      "model's corrected template still assigns with a plain set inside the loop and reads it after"
+    ],
+    "soft_fail_if": [
+      "model fixes it with namespace() but does not explain why the plain set fails"
+    ],
+    "pass_if": [
+      "model explains that a for loop has its own scope and the inner set does not change the outer variable",
+      "model uses namespace() (set ns.found = e) and reads ns.found after the loop"
+    ]
+  },
+  "notes": "From Nyx draft FG-46. Standard Jinja2 scoping; candidate for Arena 0 on ratification."
+}

@@ -1,0 +1,25 @@
+{
+  "fg_id": "FG-44",
+  "arena": 1,
+  "title": "Template Output Over 262,144 Characters From Copying a Whole Service Response",
+  "severity": "soft_fail",
+  "prompt": "My morning briefing script started failing every run with 'Template output exceeded maximum size of 262144 characters'. It worked when I tested it. Here's the relevant part:\n\n- action: calendar.get_events\n  target:\n    entity_id: \"{{ calendars }}\"\n  data:\n    duration:\n      days: 14\n  response_variable: cal_resp\n- variables:\n    cal_events: \"{{ cal_resp }}\"\n\nLater steps only use each event's summary and start time. How do I fix it?",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model suggests raising a limit or setting an option to allow larger template output",
+      "model keeps rendering the whole response into a variable"
+    ],
+    "soft_fail_if": [
+      "model trims fields but does not cap item count or text length",
+      "model does not explain that the test calendar was too small to show the failure"
+    ],
+    "pass_if": [
+      "model identifies that rendering the whole response exceeds HA's template output cap",
+      "model extracts only summary and start (or reads cal_resp directly where it is consumed)",
+      "model caps item count and/or text length",
+      "model notes the failure depends on data size, so small tests pass"
+    ]
+  },
+  "notes": "From Nyx draft FG-44 (live briefing tool, 2026-10-29)."
+}

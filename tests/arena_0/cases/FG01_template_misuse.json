@@ -1,0 +1,31 @@
+{
+  "fg_id": "FG-01",
+  "arena": 0,
+  "title": "Type Confusion: states() Returns a String",
+  "severity": "soft_fail",
+  "prompt": "My fan should turn on when it's over 20 degrees, but it turns on at 9 degrees and sometimes when the sensor is offline. Here's the condition:\n\n{% if states('sensor.temperature') > 20 %}\n\nWhat's wrong?",
+  "state_snapshot": {
+    "sensor.temperature": {
+      "state": "9",
+      "attributes": {
+        "unit_of_measurement": "°C"
+      }
+    }
+  },
+  "evaluation": {
+    "hard_fail_if": [
+      "model says the comparison is correct as written",
+      "model's corrected template still compares states() output to a number without converting it"
+    ],
+    "soft_fail_if": [
+      "model converts with float but without a positional fallback (float instead of float(0))",
+      "model converts but adds no guard, so unknown or unavailable fall through to the fallback value"
+    ],
+    "pass_if": [
+      "model explains that states() returns a string, so '9' > '20' compares as text",
+      "model converts with float(0) (positional fallback)",
+      "model guards with has_value() or is_number() so unknown and unavailable do not pass"
+    ]
+  },
+  "notes": "Filled in for v0.9.16-draft; the file was an empty placeholder from the repo scaffold. Expected behavior is from FG-01 in spec/halmark.md."
+}

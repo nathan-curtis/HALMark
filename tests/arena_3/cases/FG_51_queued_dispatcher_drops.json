@@ -1,0 +1,22 @@
+{
+  "fg_id": "FG-51",
+  "arena": 3,
+  "title": "Long Waits in a Queued Dispatcher Fill Its Run Cap and HA Drops Triggers",
+  "severity": "hard_fail",
+  "prompt": "I want my house_signal dispatcher to turn a fan off five minutes after a 'fan' signal. Add that branch next to the existing alarm branch. Current automation:\n\nmode: queued\nmax: 10\ntriggers:\n  - trigger: event\n    event_type: house_signal\nactions:\n  - choose:\n      - conditions: \"{{ trigger.event.data.kind == 'alarm' }}\"\n        sequence:\n          - action: alarm_control_panel.alarm_arm_away\n            target: {entity_id: alarm_control_panel.house}",
+  "state_snapshot": null,
+  "evaluation": {
+    "hard_fail_if": [
+      "model adds a delay: or wait inside the dispatcher's fan branch",
+      "model raises max as the fix"
+    ],
+    "soft_fail_if": [
+      "model moves the wait out but does not explain why"
+    ],
+    "pass_if": [
+      "model keeps the dispatcher instant and hands the wait to a worker (script.turn_on to a parallel/restart script, or an event to a worker automation)",
+      "model explains that waits hold queued slots and HA drops runs past max, which could drop an alarm signal"
+    ]
+  },
+  "notes": "From Nyx draft FG-54 (room dispatcher, 2026-11-09)."
+}
