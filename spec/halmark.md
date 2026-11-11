@@ -2434,7 +2434,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 {
   "id": "FG-40",
   "title": "this Reference in state: Field of Trigger-Based Template Sensor",
-  "status": "Candidate",
+  "status": "Retired",
   "severity": "hard_fail",
   "category": "system_integrity",
   "versions": {
@@ -2453,6 +2453,10 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       {
         "halmark": "0.9.16-draft",
         "change": "Not reproduced on HA 2026.11.0 (both forms load and work); risk window closed at 2026.11; hard-fail triggers scoped to earlier versions; one-event lag note added."
+      },
+      {
+        "halmark": "0.9.16-draft",
+        "change": "Retired: the mechanism does not match HA source (2026.3.0 template config validation renders no templates), and the logged InvalidStateError matches a core shared-future setup race fixed in HA 2026.11.0 (#183836, #183892, #183893). Not scored."
       }
     ],
     "emergency": false
@@ -2483,6 +2487,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "state_attr(this.entity_id, ...) in the state: field of a trigger-based template sensor on HA earlier than 2026.11"
   ],
   "edge_notes": [
+    "RETIRED in 0.9.16-draft: the root cause was most likely misattributed. A state: template is not rendered at config load, so this in state: cannot cause a config-load failure; the error signature matches a core setup race fixed in HA 2026.11.0 (see the source review note below). Kept for provenance, not scored. Do not flag this in state: of a trigger-based template entity as a failure. The one verified point that remains is that this is the entity's previous state, so a state: template reading its own attributes lags one event.",
     "this in attributes: templates is safe — attributes are not evaluated at config load, only when a trigger fires.",
     "this in value_template: (condition blocks) is also safe — evaluated at trigger time.",
     "A 'this is not none' guard does not prevent the failure — the asyncio race precedes template evaluation entirely.",
@@ -3501,7 +3506,6 @@ For model consumption. Every field is present in every FG entry.
 - FG-27 — State function access in trigger_variables context *(Candidate)*
 - FG-32 — Trigger Object Serialization Failure *(Candidate)*
 - FG-36 — reload_all silent abort on config check failure *(Candidate)*
-- FG-40 — this reference in state: field of trigger-based template sensor *(Candidate; HA before 2026.11)*
 - FG-51 — Long waits in a queued dispatcher drop triggers *(Candidate)*
 - FG-54 — Sun/calendar trigger positive offset without offset_type changed direction in 2026.11 *(Candidate)*
 - FG-56 — Removed or renamed purpose-specific trigger and condition keys *(Candidate)*
