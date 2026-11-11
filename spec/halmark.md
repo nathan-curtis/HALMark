@@ -1341,7 +1341,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "State value has a separate, unrelated 255-character limit. Attributes are the correct place for structured data — but they are not unlimited.",
     "CORRECTED in 0.9.16-draft: earlier versions said the attributes are gone after a restart. They are not: restore_state is separate from the recorder and has no size limit. Severity lowered from hard_fail to soft_fail; the loss is history, not live data.",
     "A distributed package cannot safely ship a recorder: block, because the user owns theirs. For an integration author the fix is install guidance (recorder exclude), not code.",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): a 20,000-character attribute logged 'State attributes for sensor.x exceed maximum size of 16384 bytes. This can cause database performance issues; Attributes will not be stored', and the full attribute was back on the live entity after a restart. Production evidence: ZenOS FileCabinet sensors log the same warning on every write and keep their data across restarts."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): a 20,000-character attribute logged 'State attributes for sensor.x exceed maximum size of 16384 bytes. This can cause database performance issues; Attributes will not be stored', and the full attribute was back on the live entity after a restart. Production evidence: ZenOS FileCabinet sensors log the same warning on every write and keep their data across restarts."
   ]
 }
 ```
@@ -2108,7 +2108,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Native typing applies to every rendered value, not only JSON objects. HA docs (templating/types): HA 'converts the result to the type it looks like': lists and dicts, whole numbers (int), decimals (float) and True/False (bool). Exceptions stay text: numbers with leading zeros, scientific notation, and lowercase true/false/none. A normalizer must output the final shape, not pass the input through.",
     "Severity raised to hard_fail in 0.9.16-draft: both wrong cases crash the step (from_json on a dict; states() on a list).",
     "List case submitted by: Nathan Curtis, from a storage tool that crashed on any array-shaped volume argument, 2026-10-29 (Nyx draft FG-45).",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): in a variables: step, 'true' stayed a string, 'True' became a boolean, '007' stayed a string, '[1,2]' became a list."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): in a variables: step, 'true' stayed a string, 'True' became a boolean, '007' stayed a string, '[1,2]' became a list."
   ]
 }
 ```
@@ -2172,11 +2172,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Agent uses homeassistant.reload_all as the routine post-edit reload when a targeted domain reload covers the edit"
   ],
   "edge_notes": [
-    "CORRECTED in 0.9.16-draft: homeassistant.reload_all is subject to this FG and is not the preferred post-edit reload. It re-creates changed automations and stops their in-flight runs, exactly like automation.reload (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11), and reloads every other YAML domain as well. Its config check (FG-36) does not protect running automations. Prefer the targeted reload; use reload_all only when necessary.",
+    "CORRECTED in 0.9.16-draft: homeassistant.reload_all is subject to this FG and is not the preferred post-edit reload. It re-creates changed automations and stops their in-flight runs, exactly like automation.reload (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11), and reloads every other YAML domain as well. Its config check (FG-36) does not protect running automations. Prefer the targeted reload; use reload_all only when necessary.",
     "script.reload does not kill running scripts in the same way — scripts complete their current run before the reload takes effect. This asymmetry is a known HA behavior.",
     "Related: FG-09 (No Backup Warning Before Irreversible Changes) — same operator_integrity principle, different surface.",
     "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: ZenOS-AI systemtools 4.1.0 reload implementation review.",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): after editing automation A's alias only, automation.reload stopped A's in-flight run, and unchanged automation B finished its 3-minute delay. Same result with homeassistant.reload_all. Present in current source (automation/util.py). The HA version where it began has not been traced.",
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): after editing automation A's alias only, automation.reload stopped A's in-flight run, and unchanged automation B finished its 3-minute delay. Same result with homeassistant.reload_all. Present in current source (automation/util.py). The HA version where it began has not been traced.",
     "REVIEW: the script.reload edge note has not been re-verified against current HA."
   ]
 }
@@ -2479,8 +2479,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Submitted by: Nyx / Cayt (ZenOS session) — production-confirmed on HA 2026.3.0 (ZenOS-AI install).",
     "HA docs (integrations/template): trigger_variables 'are also available in variables, conditions, actions, and all entity templates.' trigger_variables are limited templates (see FG-27), so they do not replace the trigger.id convention for reading state.",
     "Trigger-based template entities support a per-entity conditions: option: 'Define conditions that have to be met before template entity updates are performed' (HA docs; release notes date it to 2026.9).",
-    "NOT REPRODUCED on HA 2026.11.0 (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): this.attributes.get(...) and state_attr(this.entity_id, ...) in state: both loaded after a full restart with no InvalidStateError, and both rendered correctly. Matches the current docs, which allow this in all templates of trigger-based entities. The failure was production-confirmed on 2026.3.0; the release that fixed it is not identified, so ha_risk_window.end (2026.11) is an upper bound. On 2026.11+ do not flag this in state: as a failure.",
-    "Still true on 2026.11: this is the entity's previous state. A state: template that reads its own attribute sees the value from before the current trigger, so it lags one event (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11: first event gave init, second gave online). Compute the state from the trigger or action variables, not from this, when it must reflect the current event."
+    "NOT REPRODUCED on HA 2026.11.0 (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): this.attributes.get(...) and state_attr(this.entity_id, ...) in state: both loaded after a full restart with no InvalidStateError, and both rendered correctly. Matches the current docs, which allow this in all templates of trigger-based entities. The failure was production-confirmed on 2026.3.0; the release that fixed it is not identified, so ha_risk_window.end (2026.11) is an upper bound. On 2026.11+ do not flag this in state: as a failure.",
+    "Still true on 2026.11: this is the entity's previous state. A state: template that reads its own attribute sees the value from before the current trigger, so it lags one event (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11: first event gave init, second gave online). Compute the state from the trigger or action variables, not from this, when it must reflect the current event."
   ]
 }
 ```
@@ -2674,13 +2674,13 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112.",
     "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
     "as_datetime takes a default argument: as_datetime(x, none) is shorter than | default(none, true) (HA docs: as_datetime(value, default)). The docs do not say which HA version added default.",
-    "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11; the docs show only the space-separated form). Do not route by separator; use as_datetime(raw, none).",
+    "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11; the docs show only the space-separated form). Do not route by separator; use as_datetime(raw, none).",
     "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
     "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
     "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
     "as_datetime returns a naive datetime for text without an offset, and subtracting a naive datetime from now() (which is aware) raises. Pipe through as_local first. as_local treats a naive datetime as local time in the HA time zone, not UTC (HA docs: template-functions/as_local).",
     "strptime: 'If you leave out default and the text can't be parsed, strptime raises an error and the template fails.' The format must match the input exactly (HA docs: template-functions/strptime).",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None."
   ]
 }
 ```
@@ -2736,7 +2736,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Rendering a whole response also round-trips it through text and native typing; see FG-33 and FG-34.",
     "Documented on the templating errors page: 'TemplateError: Template output exceeded maximum size of 262144 characters'. HA source: MAX_TEMPLATE_OUTPUT = 256 * 1024, counted in characters, checked on render output. The HA version that introduced it was not traced; ha_risk_window stays 'all'.",
     "Submitted by: Nathan Curtis, from a briefing tool that failed every call on a live install, 2026-10-29.",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): 'x' * 262144 renders in a variables: step; 'x' * 262145 fails with 'Template output exceeded maximum size of 262144 characters'."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): 'x' * 262144 renders in a variables: step; 'x' * 262145 fails with 'Template output exceeded maximum size of 262144 characters'."
   ]
 }
 ```
@@ -2902,7 +2902,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "FG-19 discourages state-object access where states()/state_attr() exist. last_changed has no function equivalent, so states[x].last_changed guarded for none is the accepted exception.",
     "Sweep: grep -rnP \"\\bin states(?![\\w.(\\[])\".",
     "Submitted by: Nathan Curtis, from a room occupancy bridge that never ran, 2026-11-09.",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): 'sun.sun' in states and 'sun.sun' in states.sun are both False; states['sun.sun'] is not none is True; states['sensor.does_not_exist'] is None."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): 'sun.sun' in states and 'sun.sun' in states.sun are both False; states['sun.sun'] is not none is True; states['sensor.does_not_exist'] is None."
   ]
 }
 ```
@@ -3058,7 +3058,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "HA script and automation runs interleave at every await point (each action call, delay or wait), so a read in one step and a write in a later step is never atomic.",
     "Shows up only under load (several rooms or devices at once), so a single-device test passes.",
     "mode: queued on a writer script is not enough if each caller reads before calling it; the read must happen inside the serialized step.",
-    "Confirmed: a trigger-based template entity applied 20 back-to-back events with distinct keys with none lost, 10 of 10 runs, both from a repeat with no delay and from 20 parallel script runs (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11).",
+    "Confirmed: a trigger-based template entity applied 20 back-to-back events with distinct keys with none lost, 10 of 10 runs, both from a repeat with no delay and from 20 parallel script runs (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11).",
     "Pair with FG-21 (size guard on the merge). this holds the entity's state and attributes from before the render (HA docs: integrations/template).",
     "Submitted by: Nathan Curtis, from rooms losing each other's timer state, 2026-11-09. Reframed in 0.9.16-draft around the HA-native fix."
   ]
@@ -3168,7 +3168,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Not yet in the device_attr docs page, which lists only common attributes.",
     "Code that must also run on cores older than config_entry_id can keep a version-gated fallback, and drop it when the supported floor passes that version.",
     "Submitted by: Nathan Curtis, from the HA 2026.11.0 upgrade log on a ZenOS-AI test box, 2026-11-04. Deprecation start corrected to 2026.10 from release notes.",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): config_entry_id returns the entry ID; config_entries returns a set, so | first works but [0] does not; the deprecation warning is logged once per process."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): config_entry_id returns the entry ID; config_entries returns a set, so | first works but [0] does not; the deprecation warning is logged once per process."
   ]
 }
 ```
@@ -3286,7 +3286,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "UI-made triggers were not affected: 'the UI always wrote offset_type' (release notes).",
     "Silent on upgrade: the automation keeps loading and keeps firing, only at the wrong time. A porch light that came on 30 minutes before sunset now comes on 30 minutes after.",
     "Source: HA 2026.11 release notes, Backward-incompatible changes, 'Calendar and Sun' (PR #184855).",
-    "Confirmed (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11): calendar.event_started with offset minutes: 3 and no offset_type fired 3 minutes after the event start; with offset_type: before it fired 3 minutes before."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): calendar.event_started with offset minutes: 3 and no offset_type fired 3 minutes after the event start; with offset_type: before it fired 3 minutes before."
   ]
 }
 ```
