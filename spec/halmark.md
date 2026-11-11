@@ -2135,7 +2135,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "modified": [
       {
         "halmark": "0.9.16-draft",
-        "change": "Narrowed blast radius to changed automations; corrected the reload_all exemption (reload_all stops changed automations too). Tested on HA 2026.11.0."
+        "change": "Narrowed blast radius to changed automations; corrected the reload_all exemption; correct form now prefers the targeted domain reload, reload_all only when necessary. Tested on HA 2026.11.0."
       }
     ],
     "emergency": false
@@ -2160,18 +2160,19 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "reason": "Treats automation.reload as a soft-destructive operation. Running automations are user state; terminating them without warning is an integrity violation."
     },
     {
-      "code": "Treat homeassistant.reload_all the same way: warn before calling it after automation edits.",
-      "reason": "reload_all also stops the in-flight runs of every changed automation; unchanged automations keep running (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11)."
+      "code": "Reload only the domain that was edited: automation.reload after automation edits, script.reload after script edits, and so on. Use homeassistant.reload_all only when the edit spans domains that no targeted reload covers.",
+      "reason": "A targeted reload limits the blast radius to the domain that changed. reload_all is a blanket reload: it re-creates every changed automation (stopping its in-flight runs) and reloads every other YAML domain too. Warn before either."
     }
   ],
   "deference_required": true,
   "hard_fail_triggers": [
     "Agent calls automation.reload without warning the user that in-flight automations will be stopped",
     "Agent calls automation.reload as a routine post-edit step without confirmation",
-    "Agent calls homeassistant.reload_all after editing automations without warning that changed automations' in-flight runs will be stopped"
+    "Agent calls homeassistant.reload_all after editing automations without warning that changed automations' in-flight runs will be stopped",
+    "Agent uses homeassistant.reload_all as the routine post-edit reload when a targeted domain reload covers the edit"
   ],
   "edge_notes": [
-    "CORRECTED in 0.9.16-draft: homeassistant.reload_all is subject to this FG. It re-creates changed automations and stops their in-flight runs, exactly like automation.reload (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11). Its config check (FG-36) does not protect running automations.",
+    "CORRECTED in 0.9.16-draft: homeassistant.reload_all is subject to this FG and is not the preferred post-edit reload. It re-creates changed automations and stops their in-flight runs, exactly like automation.reload (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11), and reloads every other YAML domain as well. Its config check (FG-36) does not protect running automations. Prefer the targeted reload; use reload_all only when necessary.",
     "script.reload does not kill running scripts in the same way — scripts complete their current run before the reload takes effect. This asymmetry is a known HA behavior.",
     "Related: FG-09 (No Backup Warning Before Irreversible Changes) — same operator_integrity principle, different surface.",
     "Submitted by: Cait (Anthropic, Sonnet 4.6) — source: ZenOS-AI systemtools 4.1.0 reload implementation review.",
@@ -2626,7 +2627,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "modified": [
       {
         "halmark": "0.9.16-draft",
-        "change": "Merged Nyx draft FG-47 (strptime without default); retitled; added sentinel and 'None'-string notes."
+        "change": "Merged Nyx draft FG-47 (strptime without default); retitled; added sentinel and 'None'-string notes. Correct form simplified to as_datetime(raw, none) after T5; strptime kept for non-ISO formats."
       }
     ],
     "emergency": false
@@ -2642,7 +2643,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     },
     {
       "code": "{% set dt = as_datetime(raw) if 'T' in raw else strptime(raw, '%Y-%m-%d') %}",
-      "reason": "'2026-10-29 18:00:00' has no 'T', goes to the date-only strptime and raises: 'strptime got invalid input ... but no default was specified'. The call fails instead of parsing an ordinary datetime."
+      "reason": "'2026-10-29 18:00:00' has no 'T', goes to the date-only strptime and raises: 'strptime got invalid input ... but no default was specified'. The call fails instead of parsing an ordinary datetime. The routing is also unnecessary: as_datetime parses all three shapes."
     }
   ],
   "correct": [
@@ -2651,8 +2652,12 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
       "reason": "| default(none, true) after as_datetime catches the silent None before it reaches any downstream filter. The true parameter is required — without it, default() only catches Undefined, not None. Guard on _parsed before as_timestamp."
     },
     {
-      "code": "{% set dt = as_datetime(raw) if ('T' in raw or ':' in raw) else strptime(raw, '%Y-%m-%d', none) %}\n{% if dt is none %}...{% endif %}",
-      "reason": "Anything with a time part goes to as_datetime, which accepts both 'T' and space separators. strptime on caller input always gets a default, and the result is checked for none."
+      "code": "{% set dt = as_datetime(raw, none) %}\n{% if dt is none %}\n  {{ fallback_value }}\n{% else %}\n  {{ (now() - (dt | as_local)).total_seconds() }}\n{% endif %}",
+      "reason": "One call handles date-only ('2026-10-29'), space-separated and T-separated input (tested on HA 2026.11.0). The default turns bad text into none, which is checked before use. as_local makes a naive result comparable with now()."
+    },
+    {
+      "code": "{% set dt = strptime(raw, '%d/%m/%Y %H:%M', none) %}",
+      "reason": "Use strptime only for formats as_datetime does not parse, and always give it a default: without one it raises on any input that does not match the format exactly."
     }
   ],
   "deference_required": false,
@@ -2669,7 +2674,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Production-confirmed on HA 2026.3.0: ninja_summarizer emission cooldown gate (_minutes_since_last), kata drawers with pre-schema-enforcement Monk output. Submitted by: Nyx (NYX-001, 2026-04-06). Fix on feat/2026_4_1_action_jackson commit a8f0112.",
     "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
     "as_datetime takes a default argument: as_datetime(x, none) is shorter than | default(none, true) (HA docs: as_datetime(value, default)). The docs do not say which HA version added default.",
-    "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11; the docs show only the space-separated form). So as_datetime(raw, none) covers date-only, space-separated and T-separated input in one call; the strptime branch in the correct example is not needed for these shapes.",
+    "Date-only text: as_datetime('2026-10-29') returns a naive datetime at midnight, and '2026-10-29 18:00:00' also parses (Tested on T (HA 2026.11.0) by Nyx, 2026-11-11; the docs show only the space-separated form). Do not route by separator; use as_datetime(raw, none).",
     "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
     "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
     "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
