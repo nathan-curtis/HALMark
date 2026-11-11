@@ -2495,7 +2495,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "HA docs (integrations/template): trigger_variables 'are also available in variables, conditions, actions, and all entity templates.' trigger_variables are limited templates (see FG-27), so they do not replace the trigger.id convention for reading state.",
     "Trigger-based template entities support a per-entity conditions: option: 'Define conditions that have to be met before template entity updates are performed' (HA docs; release notes date it to 2026.9).",
     "NOT REPRODUCED on HA 2026.11.0 (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): this.attributes.get(...) and state_attr(this.entity_id, ...) in state: both loaded after a full restart with no InvalidStateError, and both rendered correctly. Matches the current docs, which allow this in all templates of trigger-based entities. The failure was production-confirmed on 2026.3.0; the release that fixed it is not identified, so ha_risk_window.end (2026.11) is an upper bound. On 2026.11+ do not flag this in state: as a failure.",
-    "Still true on 2026.11: this is the entity's previous state. A state: template that reads its own attribute sees the value from before the current trigger, so it lags one event (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11: first event gave init, second gave online). Compute the state from the trigger or action variables, not from this, when it must reflect the current event."
+    "Still true on 2026.11: this is the entity's previous state. A state: template that reads its own attribute sees the value from before the current trigger, so it lags one event (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11: first event gave init, second gave online). Compute the state from the trigger or action variables, not from this, when it must reflect the current event.",
+    "Source review (0.9.16-draft): no HA change between 2026.3.0 and 2026.11.0 fixes a this-in-state: problem, and the mechanism in this FG does not match the code. In 2026.3.0 the template integration's config validation (components/template/config.py, async_validate_config_section) validates triggers and conditions only and renders no templates, so a state: template is not evaluated at config load. The logged error ('Setup failed for template: Invalid config ... InvalidStateError: invalid state') matches a core race instead: when a caller waiting on a shared integration-load or setup future is cancelled (for example by a bootstrap stage timeout), the shared future is cancelled with it and the later set_result raises InvalidStateError (same signature for scripts in HA issue #152217). Fixed by PRs #183836, #183892 and #183893 (wait_shared_future in the loader, requirements and setup), first shipped in HA 2026.11.0, which is also the first version where T1 could not reproduce the failure. The 2026.3.0 incident was most likely this race, not the use of this; the restart after the revert would have cleared it either way."
   ]
 }
 ```
@@ -2575,7 +2576,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "strptime case source: a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47).",
     "as_datetime returns a naive datetime for text without an offset, and subtracting a naive datetime from now() (which is aware) raises. Pipe through as_local first. as_local treats a naive datetime as local time in the HA time zone, not UTC (HA docs: template-functions/as_local).",
     "strptime: 'If you leave out default and the text can't be parsed, strptime raises an error and the template fails.' The format must match the input exactly (HA docs: template-functions/strptime).",
-    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): as_datetime('21:17:19') returns None; as_datetime('garbage', 'fallback') returns 'fallback'; as_datetime(none) raises 'as_datetime got invalid input 'None' ... but no default was specified'; strptime('2026-10-29 18:00:00', '%Y-%m-%d', none) returns None.",
+    "Version: the default argument of as_datetime was added by HA core PR #107229 (merged 2024-01-29) and first shipped in HA 2024.2.0. Before 2024.2, as_datetime already returned None for unparseable text but accepted no default, so the as_datetime(raw, none) form in the correct example needs HA 2024.2 or later."
   ]
 }
 ```
@@ -2713,9 +2715,9 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "category": "system_integrity",
   "versions": {
     "added_halmark": "0.9.16-draft",
-    "added_ha": "all",
+    "added_ha": "2024.10",
     "ha_risk_window": {
-      "start": "all",
+      "start": "2024.10",
       "end": null,
       "end_type": null
     },
@@ -2751,7 +2753,8 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "Rendering a whole response also round-trips it through text and native typing; see FG-33 and FG-34.",
     "Documented on the templating errors page: 'TemplateError: Template output exceeded maximum size of 262144 characters'. HA source: MAX_TEMPLATE_OUTPUT = 256 * 1024, counted in characters, checked on render output. The HA version that introduced it was not traced; ha_risk_window stays 'all'.",
     "Source: a briefing tool that failed every call on a live install, 2026-10-29.",
-    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): 'x' * 262144 renders in a variables: step; 'x' * 262145 fails with 'Template output exceeded maximum size of 262144 characters'."
+    "Confirmed (Tested on a live HA 2026.11.0 test box by Nyx, 2026-11-11): 'x' * 262144 renders in a variables: step; 'x' * 262145 fails with 'Template output exceeded maximum size of 262144 characters'.",
+    "Version: the cap was added by HA core PR #124946 ('Limit maximum template render output to 256KiB', merged 2024-08-30) and first shipped in HA 2024.10.0; it is not in any 2024.9.x release. Before 2024.10 there was no output limit."
   ]
 }
 ```
