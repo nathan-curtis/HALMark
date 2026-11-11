@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-56",
+  "fg_id": "FG-53",
   "arena": 4,
   "title": "A Numeric Fallback That Is Also a Real Value",
   "severity": "hard_fail",

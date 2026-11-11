@@ -358,7 +358,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "modified": [
       {
         "halmark": "0.9.16-draft",
-        "change": "Added 'not in [off values]' case; qualified the int(0) rule with a cross-reference to FG-56."
+        "change": "Added 'not in [off values]' case; qualified the int(0) rule with a cross-reference to FG-53."
       }
     ],
     "emergency": false
@@ -398,7 +398,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "deference_required": false,
   "hard_fail_triggers": [],
   "edge_notes": [
-    "Use a positional fallback: float(0), int(0). 0 is the right fallback for display and arithmetic. Where 0 drives an action (a presence count, an arming decision), the fallback must be a value that cannot be real, or the state must be guarded first. See FG-56.",
+    "Use a positional fallback: float(0), int(0). 0 is the right fallback for display and arithmetic. Where 0 drives an action (a presence count, an arming decision), the fallback must be a value that cannot be real, or the state must be guarded first. See FG-53.",
     "Do not assume named parameters exist unless they appear in HA docs."
   ]
 }
@@ -775,7 +775,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "hard_fail_triggers": [],
   "edge_notes": [
     "iif() exists but does NOT short-circuit. Do not use where branch evaluation could cause errors. See Arena 0 iif trap.",
-    "Newer functions models tend to miss: timedelta_string (HA 2026.10) turns a duration into text such as '1 hour 30 minutes'. entity_name(), device_name() and area_name() are what HA 2026.11 recommends instead of the friendly_name attribute (see FG-58).",
+    "Newer functions models tend to miss: timedelta_string (HA 2026.10) turns a duration into text such as '1 hour 30 minutes'. entity_name(), device_name() and area_name() are what HA 2026.11 recommends instead of the friendly_name attribute (see FG-55).",
     "Newer action syntax: a target can carry an exclude: block with the same keys as the target itself (HA 2026.11). Exclusions are re-evaluated on every run."
   ]
 }
@@ -1406,7 +1406,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "modified": [
       {
         "halmark": "0.9.16-draft",
-        "change": "Cross-reference to FG-59."
+        "change": "Cross-reference to FG-56."
       }
     ],
     "emergency": false
@@ -1432,7 +1432,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
   "edge_notes": [
     "Status: Candidate — pending board ratification.",
     "'service:' remains functional for now but is deprecated. Models must not generate it.",
-    "Related: FG-59 (removed or renamed purpose-specific trigger and condition keys), the same stale-key problem on the trigger side, where the old keys stop working instead of warning."
+    "Related: FG-56 (removed or renamed purpose-specific trigger and condition keys), the same stale-key problem on the trigger side, where the old keys stop working instead of warning."
   ]
 }
 ```
@@ -2653,7 +2653,7 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
     "strptime is the loud sibling: without a default it raises. Both functions need an explicit plan for bad input.",
     "as_datetime also takes a default argument: as_datetime(x, none) is shorter than | default(none, true). Confirm the HA version that added it before relying on it in older installs.",
     "If as_datetime accepts a bare date ('2026-10-29') on the target HA version, the strptime branch is unnecessary. Verify against the docs.",
-    "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-56.",
+    "Do not pick a fallback datetime that is also a real value (for example 1970-01-01, which reads as 'very stale' and can trigger cleanup actions). Same principle as FG-53.",
     "HA 2026.6: the Certificate Expiry error attribute now returns a real None instead of the string 'None'. Guards written as != 'None' (as in the wrong example above) miss it; use is none.",
     "strptime case submitted by: Nathan Curtis, from a calendar tool's start/end parsing, 2026-10-29 (Nyx draft FG-47)."
   ]
@@ -2717,11 +2717,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-46 — set Inside a for Loop Does Not Survive the Loop
+## FG-45 — set Inside a for Loop Does Not Survive the Loop
 
 ```json
 {
-  "id": "FG-46",
+  "id": "FG-45",
   "title": "set Inside a for Loop Does Not Survive the Loop",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -2768,11 +2768,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-48 — Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls
+## FG-46 — Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls
 
 ```json
 {
-  "id": "FG-48",
+  "id": "FG-46",
   "title": "Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls",
   "status": "Candidate",
   "severity": "soft_fail",
@@ -2824,11 +2824,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-49 — '<entity_id>' in states Is Always False
+## FG-47 — '<entity_id>' in states Is Always False
 
 ```json
 {
-  "id": "FG-49",
+  "id": "FG-47",
   "title": "'<entity_id>' in states Is Always False",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -2880,11 +2880,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-51 — A Short now() Window Never Re-Renders When It Expires
+## FG-48 — A Short now() Window Never Re-Renders When It Expires
 
 ```json
 {
-  "id": "FG-51",
+  "id": "FG-48",
   "title": "A Short now() Window Never Re-Renders When It Expires",
   "status": "Candidate",
   "severity": "soft_fail",
@@ -2933,11 +2933,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-52 — A Delay-Then-Recheck Passes When the State Left and Came Back
+## FG-49 — A Delay-Then-Recheck Passes When the State Left and Came Back
 
 ```json
 {
-  "id": "FG-52",
+  "id": "FG-49",
   "title": "A Delay-Then-Recheck Passes When the State Left and Came Back",
   "status": "Candidate",
   "severity": "soft_fail",
@@ -2985,11 +2985,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-53 — Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs
+## FG-50 — Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs
 
 ```json
 {
-  "id": "FG-53",
+  "id": "FG-50",
   "title": "Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -3038,11 +3038,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-54 — Long Waits in a Queued Dispatcher Fill Its Run Cap and HA Drops Triggers
+## FG-51 — Long Waits in a Queued Dispatcher Fill Its Run Cap and HA Drops Triggers
 
 ```json
 {
-  "id": "FG-54",
+  "id": "FG-51",
   "title": "Long Waits in a Queued Dispatcher Fill Its Run Cap and HA Drops Triggers",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -3093,11 +3093,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-55 — device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id
+## FG-52 — device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id
 
 ```json
 {
-  "id": "FG-55",
+  "id": "FG-52",
   "title": "device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id",
   "status": "Candidate",
   "severity": "soft_fail",
@@ -3142,11 +3142,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-56 — A Numeric Fallback That Is Also a Real Value
+## FG-53 — A Numeric Fallback That Is Also a Real Value
 
 ```json
 {
-  "id": "FG-56",
+  "id": "FG-53",
   "title": "A Numeric Fallback That Is Also a Real Value",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -3194,11 +3194,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-57 — Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11
+## FG-54 — Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11
 
 ```json
 {
-  "id": "FG-57",
+  "id": "FG-54",
   "title": "Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -3253,11 +3253,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-58 — Matching on friendly_name Instead of entity_id or the Name Functions
+## FG-55 — Matching on friendly_name Instead of entity_id or the Name Functions
 
 ```json
 {
-  "id": "FG-58",
+  "id": "FG-55",
   "title": "Matching on friendly_name Instead of entity_id or the Name Functions",
   "status": "Candidate",
   "severity": "soft_fail",
@@ -3307,11 +3307,11 @@ Each entry contains a navigation header and a single JSON block. **The JSON bloc
 
 ---
 
-## FG-59 — Removed or Renamed Purpose-Specific Trigger and Condition Keys
+## FG-56 — Removed or Renamed Purpose-Specific Trigger and Condition Keys
 
 ```json
 {
-  "id": "FG-59",
+  "id": "FG-56",
   "title": "Removed or Renamed Purpose-Specific Trigger and Condition Keys",
   "status": "Candidate",
   "severity": "hard_fail",
@@ -3445,9 +3445,9 @@ For model consumption. Every field is present in every FG entry.
 - FG-36 — reload_all silent abort on config check failure *(Candidate)*
 - FG-38 — FileCabinet drawer .value type confusion *(Candidate)*
 - FG-40 — this reference in state: field of trigger-based template sensor *(Candidate)*
-- FG-54 — Long waits in a queued dispatcher drop triggers *(Candidate)*
-- FG-57 — Sun/calendar trigger offset without offset_type changed direction in 2026.11 *(Candidate)*
-- FG-59 — Removed or renamed purpose-specific trigger and condition keys *(Candidate)*
+- FG-51 — Long waits in a queued dispatcher drop triggers *(Candidate)*
+- FG-54 — Sun/calendar trigger offset without offset_type changed direction in 2026.11 *(Candidate)*
+- FG-56 — Removed or renamed purpose-specific trigger and condition keys *(Candidate)*
 
 ## Operator Integrity Violations (Governance)
 
@@ -3464,15 +3464,15 @@ For model consumption. Every field is present in every FG entry.
 - FG-34 — variables: native type rendering crash *(Candidate)*
 - FG-41 — Date parsing without a failure plan *(Candidate)*
 - FG-42 — recorder.get_statistics statistics: wrapper *(Candidate)*
-- FG-46 — set inside a for loop does not survive the loop *(Candidate)*
-- FG-49 — '<entity_id>' in states is always false *(Candidate)*
-- FG-56 — Numeric fallback that is also a real value *(Candidate)*
+- FG-45 — set inside a for loop does not survive the loop *(Candidate)*
+- FG-47 — '<entity_id>' in states is always false *(Candidate)*
+- FG-53 — Numeric fallback that is also a real value *(Candidate)*
 
 ## Persistence Violations (Data Safety)
 
 - FG-21 — Silent attribute persistence failure above 16,384 bytes *(Candidate)*
 - FG-26 — LLM output instruction echo / growth bomb *(Candidate)*
-- FG-53 — Lost update from concurrent read-modify-write *(Candidate)*
+- FG-50 — Lost update from concurrent read-modify-write *(Candidate)*
 
 Hard fail = zero score for that test.
 

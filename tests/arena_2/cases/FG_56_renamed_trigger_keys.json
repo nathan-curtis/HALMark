@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-59",
+  "fg_id": "FG-56",
   "arena": 2,
   "title": "Removed or Renamed Purpose-Specific Trigger and Condition Keys",
   "severity": "hard_fail",

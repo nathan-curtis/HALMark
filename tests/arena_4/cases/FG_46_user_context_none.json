@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-48",
+  "fg_id": "FG-46",
   "arena": 4,
   "title": "Assuming a User Context: context.user_id Is None for Automation and Scheduler Calls",
   "severity": "soft_fail",

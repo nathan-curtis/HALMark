@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-57",
+  "fg_id": "FG-54",
   "arena": 3,
   "title": "Sun and Calendar Trigger offset Without offset_type Changed Direction in HA 2026.11",
   "severity": "hard_fail",

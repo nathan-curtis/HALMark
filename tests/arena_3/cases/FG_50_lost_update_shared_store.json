@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-53",
+  "fg_id": "FG-50",
   "arena": 3,
   "title": "Lost Update: Read-Modify-Write of One Shared Store From Concurrent Runs",
   "severity": "hard_fail",

@@ -3,6 +3,6 @@
   "name": "YAML Integrity",
   "gate": false,
   "cases": [
-    "cases/FG_59_renamed_trigger_keys.json"
+    "cases/FG_56_renamed_trigger_keys.json"
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-58",
+  "fg_id": "FG-55",
   "arena": 1,
   "title": "Matching on friendly_name Instead of entity_id or the Name Functions",
   "severity": "soft_fail",

@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-46",
+  "fg_id": "FG-45",
   "arena": 1,
   "title": "set Inside a for Loop Does Not Survive the Loop",
   "severity": "hard_fail",

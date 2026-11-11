@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-55",
+  "fg_id": "FG-52",
   "arena": 1,
   "title": "device_attr(..., 'config_entries') Is Deprecated; Read config_entry_id",
   "severity": "soft_fail",

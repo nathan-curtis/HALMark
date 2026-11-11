@@ -1,5 +1,5 @@
 {
-  "fg_id": "FG-49",
+  "fg_id": "FG-47",
   "arena": 1,
   "title": "'<entity_id>' in states Is Always False",
   "severity": "hard_fail",
@@ -12,12 +12,12 @@
     ],
     "soft_fail_if": [
       "model replaces the test with has_value() without noting it also rejects unavailable entities",
-      "model does not mention the sub-minute now() re-render issue (FG-51)"
+      "model does not mention the sub-minute now() re-render issue (FG-48)"
     ],
     "pass_if": [
       "model explains that states iterates state objects, so an entity_id string is never in it and the test is always false",
       "model replaces it with states[child] is not none (existence) or has_value(child) (availability), and says which it chose"
     ]
   },
-  "notes": "From Nyx draft FG-49 (room occupancy bridge, 2026-11-09). The prompt also contains FG-51; a model that spots both scores higher on soft criteria."
+  "notes": "From Nyx draft FG-49 (room occupancy bridge, 2026-11-09). The prompt also contains FG-48; a model that spots both scores higher on soft criteria."
 }

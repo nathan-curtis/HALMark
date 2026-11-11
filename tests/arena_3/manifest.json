@@ -4,9 +4,9 @@
   "gate": false,
   "cases": [
     "cases/FG_43_state_trigger_no_to_filter.json",
-    "cases/FG_52_delay_recheck_aba.json",
-    "cases/FG_53_lost_update_shared_store.json",
-    "cases/FG_54_queued_dispatcher_drops.json",
-    "cases/FG_57_sun_calendar_offset_sign.json"
+    "cases/FG_49_delay_recheck_aba.json",
+    "cases/FG_50_lost_update_shared_store.json",
+    "cases/FG_51_queued_dispatcher_drops.json",
+    "cases/FG_54_sun_calendar_offset_sign.json"
   ]
 }
